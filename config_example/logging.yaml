@@ -1,0 +1,147 @@
+#
+# ALERTA + IOMETRICS_ALERTA LOGGING CONFIGURATION
+#
+# To use this configuration file,
+# variable 'LOG_CONFIG_FILE' must be set for alerta referencing this file.
+#
+# Configuration is based on the following vars,
+# that will be referenced in the logging configuration dict below.
+# ** Keep anchors when modifying these values **
+#
+
+# Log level used by root logger
+DEFAULT_LOG_LEVEL: &default_log_level INFO
+
+# Log handlers to activate.
+# Options: console, file, wsgi
+DEFAULT_LOG_HANDLERS: &log_handlers
+  - console
+
+# Override level and handlers for specific loggers.
+LOGGERS_SPECIFIC: &loggers
+  iometrics_alerta:
+    level: DEBUG
+  alerta:
+    level: *default_log_level
+  flask_cors.core:
+    level: WARNING
+  mohawk:
+    level: *default_log_level
+  requests:
+    level: *default_log_level
+  urllib3:
+    level: WARNING
+  werkzeug:
+    level: WARNING
+
+# Log formatter to use in the different handlers.
+# Options: default, simple, verbose, json, syslog, custom
+LOG_FORMATTER_CONSOLE: &log_format_console default
+LOG_FORMATTER_FILE: &log_format_file default
+LOG_FORMATTER_WSGI: &log_format_wsgi default
+
+# For default formatter, the log format will depend on the logger name (first part, before first '.').
+# 'default' is used when logger name has no specific format.
+# If log context is a flask request, DEFAULT_FORMATTER_REQUEST_SUFFIX is concatenated to the logger format.
+DEFAULT_FORMATTER_FORMATS: &default_formatter_formats
+  iometrics_alerta: >-
+    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s [in %(pathname)s:%(lineno)d]
+  alerta: >-
+    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s [in %(pathname)s:%(lineno)d]
+  flask: >-
+    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+  urllib3: >-
+    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+  werkzeug: >-
+    '%(asctime)s %(name)s[%(process)d]: %(message)s
+  default: >-
+    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+# Extra fields available (provided by context filter) for logs coming from requests:
+# request_id, endpoint, method, url, reqargs, data, remote_addr and user.
+DEFAULT_FORMATTER_REQUEST_SUFFIX: &default_formatter_request >-
+  [[%(method)s request_id=%(request_id)s ip=%(remote_addr)s]]
+  
+# Format for the verbose formatter
+VERBOSE_FORMATTER_FORMAT: &verbose_format >-
+  %(asctime)s - %(name)s[%(process)d]: %(levelname)s - %(message)s [in %(pathname)s:%(lineno)d]
+
+# Format for the custom formatter
+CUSTOM_FORMATTER_FORMAT: &custom_format >-
+  %(asctime)s - %(name)s[%(process)d]: %(levelname)s - %(message)s [in %(pathname)s:%(lineno)d]
+
+# If log comes in a request context, only print log if request method is in the list
+FILTER_REQUEST_METHODS: &log_methods
+  - GET
+  - HEAD
+  - POST
+  - PUT
+  - DELETE
+  - CONNECT
+  - OPTIONS
+  - TRACE
+  - PATCH
+
+# File handler configuration.
+FILE_HANDLER_FILE: &log_file alertad.log
+FILE_HANDLER_MAX_BYTES: &log_max_bytes 10485760
+FILE_HANDLER_BACKUP_COUNT: &log_backup_count 2
+
+#
+#
+# LOGGING CONFIGURATION DICTIONARY
+#
+# Configuration sent to logging library.
+# Usually, setting variables above is enough to configure logging.
+#
+version: 1
+disable_existing_loggers: true
+formatters:
+  default:
+    (): iometrics_alerta.CustomFormatter
+    formats: *default_formatter_formats
+    request_suffix: *default_formatter_request
+  simple:
+    format: '%(levelname)s %(message)s'
+  verbose:
+    format: *verbose_format
+  json:
+    (): alerta.utils.logging.JSONFormatter
+  syslog:
+    (): alerta.utils.logging.SyslogFormatter
+    facility: local7
+  custom:
+    format: *custom_format
+filters:
+  requests:
+    (): alerta.utils.logging.RequestFilter
+    methods: *log_methods
+  context:
+    (): alerta.utils.logging.ContextFilter
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: *log_format_console
+    filters:
+      - context
+      - requests
+    stream: 'ext://sys.stdout'
+  file:
+    class: logging.handlers.RotatingFileHandler
+    formatter: *log_format_file
+    filters:
+      - context
+      - requests
+    filename: *log_file
+    maxBytes: *log_max_bytes
+    backupCount: *log_backup_count
+  wsgi:
+    class: logging.StreamHandler
+    formatter: *log_format_wsgi
+    filters:
+      - context
+      - requests
+    stream: 'ext://flask.logging.wsgi_errors_stream'
+loggers: *loggers
+root:
+  level: DEBUG  # If not DEBUG, DEBUG level in specific logger is not working. Why?
+  handlers: *log_handlers

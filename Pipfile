@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+"alerta-server[postgres]" = "~=8.7.0"
+"celery[redis]" = "~=5.2.7"
+alerta = "==8.5.1"  # Client. Needed for periodic background tasks
+requests = "*"
+python-dateutil = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"

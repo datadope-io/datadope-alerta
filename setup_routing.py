@@ -1,0 +1,61 @@
+from distutils.dir_util import remove_tree
+import os
+from setuptools import setup
+
+
+def read(filename):
+    with open(os.path.join(os.path.dirname(__file__), filename)) as f:
+        return f.read().strip()
+
+
+try:
+    remove_tree('build')
+except:  # noqa
+    pass
+
+setup(
+    name="alerta-routing",
+    version=read('VERSION'),
+    description='Alerta routing component for IOMetrics',
+    long_description=read('README.md'),
+    long_description_content_type='text/markdown',
+    url='https://datadope.io',
+    license='GPLv3',
+    author='Victor Garcia',
+    author_email='victor.garcia@datadope.io',
+    package_dir={
+        'iometrics_alerta': 'iometrics_alerta'
+    },
+    packages=[
+        'iometrics_alerta',
+        'iometrics_alerta.routing'
+    ],
+    install_requires=[
+        'alerta-server[postgres]~=8.7.0',
+    ],
+    include_package_data=True,
+    zip_safe=False,
+    classifiers=[
+        # 'Development Status :: 5 - Production/Stable',
+        'Development Status :: 4 - Beta',
+        'Environment :: Web Environment',
+        'Environment :: Plugins',
+        'Framework :: Flask',
+        'Intended Audience :: Information Technology',
+        'Intended Audience :: System Administrators',
+        'Intended Audience :: Telecommunications Industry',
+        'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.7',
+        'Topic :: System :: Monitoring',
+    ],
+    python_requires='>=3.7',
+    entry_points={
+        'alerta.routing': [
+            'rules = iometrics_alerta.routing.routing:rules'
+        ]
+    }
+)
