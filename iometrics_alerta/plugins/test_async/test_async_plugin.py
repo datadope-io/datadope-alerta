@@ -12,25 +12,32 @@ logger = getLogger(__name__)
 
 class TestAlerter(Alerter):
 
+    def _do_process(self, alert, op):
+        index, _ = self.get_contextual_configuration(VarDefinition('INDEX', default=0), alert, op)
+        sleep, _ = self.get_contextual_configuration(VarDefinition('SLEEP', default=0.0), alert, op)
+        time.sleep(sleep)
+        if index == 1:
+            raise Exception('Simulating an exception')
+        elif index == 2:
+            raise RetryableException('Simulating a retryable exception')
+        elif index == 3:
+            return False, self.failure_response('error_for_test', 'message from the error', 'extra_info')
+        elif index == 4:
+            return False, self.failure_response('error_for_test', 'message from the error', {"field": "value"})
+        elif index == 5:
+            try:
+                raise Exception('The exception')
+            except Exception as exc:
+                return False, self.failure_response('error_for_test', 'message from the error', exc)
+        elif index == 6 and self.bgtask:
+            retries = self.bgtask.request.retries
+            if (retries % 3) != 2:
+                raise RetryableException('Simulating a retryable exception')
+
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_event'
         try:
-            index, _ = self.get_contextual_configuration(VarDefinition('INDEX', default=0), alert, op)
-            sleep, _ = self.get_contextual_configuration(VarDefinition('SLEEP', default=0.0), alert, op)
-            time.sleep(sleep)
-            if index == 1:
-                raise Exception('Simulating an exception')
-            elif index == 2:
-                raise RetryableException('Simulating a retryable exception')
-            elif index == 3:
-                return False, self.failure_response('error_for_test', 'message from the error', 'extra_info')
-            elif index == 4:
-                return False, self.failure_response('error_for_test', 'message from the error', {"field": "value"})
-            elif index == 5:
-                try:
-                    raise Exception('The exception')
-                except Exception as exc:
-                    return False, self.failure_response('error_for_test', 'message from the error', exc)
+            self._do_process(alert, op)
             return True, {'test': 'ok'}
         finally:
             logger.info("Test: End event")
@@ -38,25 +45,18 @@ class TestAlerter(Alerter):
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_recovery'
         try:
-            index, _ = self.get_contextual_configuration(VarDefinition('INDEX', default=0), alert, op)
-            sleep, _ = self.get_contextual_configuration(VarDefinition('SLEEP', default=0.0), alert, op)
-            time.sleep(sleep)
-            if index == 1:
-                raise Exception('Simulating an exception')
-            elif index == 2:
-                raise RetryableException('Simulating a retryable exception')
-            elif index == 3:
-                return False, self.failure_response('error_for_test', 'message from the error', 'extra_info')
-            elif index == 4:
-                return False, self.failure_response('error_for_test', 'message from the error', {"field": "value"})
-            elif index == 5:
-                try:
-                    raise Exception('The exception')
-                except Exception as exc:
-                    return False, self.failure_response('error_for_test', 'message from the error', exc)
+            self._do_process(alert, op)
             return True, {'test_recovery': 'ok', 'reason': reason}
         finally:
             logger.info("Test: End recovery")
+
+    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        op = 'process_repeat'
+        try:
+            self._do_process(alert, op)
+            return True, {'test_repeat': 'ok', 'reason': reason}
+        finally:
+            logger.info("Test: End Repeat")
 
 
 class TestPlugin(IOMAlerterPlugin):
@@ -67,7 +67,7 @@ class TestPlugin(IOMAlerterPlugin):
                 'new': 10.0,
                 'recovery': 3.0
             },
-            'index': '{"new": 0, "recovery": 0}'
+            'index': {"new": 0, "recovery": 0}
         }
 
     def get_alerter_class(self):

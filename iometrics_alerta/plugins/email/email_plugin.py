@@ -164,6 +164,9 @@ class EMailAlerter(Alerter):
                                                 message=f"Received event tag {TAG_EMAILS_NO_RECOVERY}")
         return self._process_request(Alerter.process_recovery.__name__, alert, reason)
 
+    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        return True, {}
+
 
 class EMailPlugin(IOMAlerterPlugin):
 

@@ -1,5 +1,6 @@
 import traceback
 from abc import ABC, abstractmethod
+from datetime import datetime
 from enum import Enum
 from importlib import import_module
 from typing import Any, Dict, Tuple, Optional, Union
@@ -9,7 +10,7 @@ from celery.utils.log import get_task_logger
 
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
-    ConfigKeyDict, render_template
+    ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime
 
 
 def getLogger(name):  # noqa
@@ -37,6 +38,7 @@ class AlerterStatus(str, Enum):
     New = 'new'
     Scheduled = 'scheduled'
     Processing = 'processing'
+    Repeating = 'repeating'
     Processed = 'processed'
     Recovering = 'recovering'
     Recovered = 'recovered'
@@ -47,9 +49,11 @@ class AlerterStatus(str, Enum):
 
 
 class Alerter(ABC):
-    def __init__(self, name, config):
+
+    def __init__(self, name, config, bgtask=None):
         self.name = name
         self.config = ConfigKeyDict(config)
+        self.bgtask = bgtask
 
     @staticmethod
     def get_fullname(klass):
@@ -132,3 +136,68 @@ class Alerter(ABC):
     @abstractmethod
     def process_recovery(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         pass
+
+    @abstractmethod
+    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        pass
+
+
+ATTRIBUTE_KEYS_BY_OPERATION = {
+    Alerter.process_event.__name__: AlerterProcessAttributeConstant.KEY_NEW_EVENT,
+    Alerter.process_recovery.__name__: AlerterProcessAttributeConstant.KEY_RECOVERY,
+    Alerter.process_repeat.__name__: AlerterProcessAttributeConstant.KEY_REPEAT
+}
+
+
+def prepare_result(status: AlerterStatus, data_field: str,
+                   retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
+                   start_time: datetime = None, end_time: datetime = None,
+                   duration: float = None) -> Tuple[bool, Dict[str, Any]]:
+    if isinstance(retval, tuple):
+        result = {
+            AlerterProcessAttributeConstant.FIELD_SUCCESS: retval[0],
+            AlerterProcessAttributeConstant.FIELD_RESPONSE: retval[1]
+        }
+    else:
+        result = {
+            AlerterProcessAttributeConstant.FIELD_SUCCESS: True,
+            AlerterProcessAttributeConstant.FIELD_RESPONSE: retval
+        }
+    if start_time:
+        result[AlerterProcessAttributeConstant.FIELD_START] = DateTime.iso8601_utc(start_time)
+    if end_time:
+        result[AlerterProcessAttributeConstant.FIELD_END] = DateTime.iso8601_utc(end_time)
+    if duration is None and start_time is not None and end_time is not None:
+        duration = (end_time - start_time).total_seconds()
+    if duration is not None:
+        result[AlerterProcessAttributeConstant.FIELD_ELAPSED] = duration
+    return result[AlerterProcessAttributeConstant.FIELD_SUCCESS], {
+            AlerterProcessAttributeConstant.FIELD_STATUS: status.value,
+            data_field: result
+    }
+
+
+def result_for_exception(exc, einfo=None, include_traceback=False):
+    if exc is None and einfo is None:
+        try:
+            raise Exception('Failure without exception')
+        except Exception as e:
+            exc = e
+    result = {
+        'reason': 'exception',
+        'info': {
+            'message': str(exc or einfo.exception),
+            'type': (type(exc) if exc else einfo.type).__name__
+        }
+    }
+    if include_traceback:
+        result['info']['traceback'] = ''.join(traceback.format_exception(
+            type(exc), exc, exc.__traceback__)) if exc else einfo.traceback
+    return result
+
+
+def has_alerting_succeeded(alert, alerter_attribute_name):
+    success = alert.attributes.get(alerter_attribute_name, {}) \
+        .get(AlerterProcessAttributeConstant.KEY_NEW_EVENT, {})\
+        .get(AlerterProcessAttributeConstant.FIELD_SUCCESS, False)
+    return success

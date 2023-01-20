@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 from datetime import datetime, date
 from enum import Enum
@@ -14,7 +15,7 @@ from alerta.utils.format import DateTime
 
 ATTRIBUTE_DEDUPLICATION = 'deduplication'
 ATTRIBUTE_DEDUPLICATION_TYPE = 'deduplicationType'
-ATTRIBUTE_ORIGINAL_ID = 'originalAlertId'  # If alert is deduplicated, stores the original id.
+ATTRIBUTE_ORIGINAL_ID = 'tempOriginalAlertId'  # If alert is deduplicated, stores the original id.
 ATTRIBUTE_ORIGINAL_VALUE = 'tempOriginalValue'  # temp attribute => not stored
 
 CONFIG_DEFAULT_DEDUPLICATION_TYPE = 'DEFAULT_DEDUPLICATION_TYPE'
@@ -31,6 +32,8 @@ DB_SCHEMA_MODIFICATION = """
     USING btree (id);
 
 """
+
+logger = logging.getLogger(__name__)
 
 
 class DeduplicationType(str, Enum):
@@ -107,10 +110,9 @@ class Backend(PGBackend):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)
         if deduplication:
             alert.value = alert.attributes.pop(ATTRIBUTE_ORIGINAL_VALUE, None) or alert.value
-        alert.attributes.setdefault(ATTRIBUTE_ORIGINAL_ID, alert.id)
         return super(Backend, self).create_alert(alert)
 
-    def set_alert(self, id, severity, status, tags, attributes, timeout, previous_severity, update_time, history=None):
+    def set_alert(self, id_, severity, status, tags, attributes, timeout, previous_severity, update_time, history=None):
         update = """
             UPDATE alerts
                SET severity=%(severity)s, status=%(status)s, tags=ARRAY(SELECT DISTINCT UNNEST(tags || %(tags)s)),
@@ -120,22 +122,30 @@ class Backend(PGBackend):
              WHERE id=%(id)s OR id LIKE %(like_id)s
          RETURNING *
         """.format(limit=current_app.config['HISTORY_LIMIT'])
-        return self._updateone(update, {'id': id, 'like_id': id + '%', 'severity': severity, 'status': status,
+        return self._updateone(update, {'id': id_, 'like_id': id_ + '%', 'severity': severity, 'status': status,
                                         'tags': tags, 'attributes': attributes, 'timeout': timeout,
                                         'previous_severity': previous_severity, 'update_time': update_time,
                                         'change': history}, returning=True)
 
-    def is_duplicate_original(self, alert):
-        select = """
-            SELECT * FROM alerts
-             WHERE environment=%(environment)s
-               AND resource=%(resource)s
-               AND event=%(event)s
-               AND severity=%(severity)s
-               AND {customer}
-               ORDER BY last_receive_time DESC
-            """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL')
-        return self._fetchone(select, vars(alert))
+    @staticmethod
+    def _deduplication_filter(deduplication_type, deduplication):
+        if deduplication_type == DeduplicationType.ByAttribute and not deduplication:
+            # Deduplication only by attribute but no attribute is provided => alert can not deduplicate
+            dedup_filter = None
+        elif deduplication_type == DeduplicationType.ByAttribute:
+            # Deduplicate only by attribute
+            dedup_filter = "attributes->>'{deduplication_attr}'='{deduplication}'"
+        elif not deduplication:
+            # Deduplicate only by resource/event
+            dedup_filter = 'resource=%(resource)s AND event=%(event)s'
+        else:
+            # Deduplicate by resource/event or attribute
+            dedup_filter = "((resource=%(resource)s AND event=%(event)s) " \
+                           "OR attributes->>'{deduplication_attr}'='{deduplication}')"
+        if dedup_filter:
+            dedup_filter = dedup_filter.format(deduplication_attr=ATTRIBUTE_DEDUPLICATION,
+                                               deduplication=deduplication)
+        return dedup_filter
 
     def is_duplicate(self, alert):
         deduplication_type = DeduplicationType(alert.attributes.get(
@@ -145,33 +155,31 @@ class Backend(PGBackend):
             alert.attributes[ATTRIBUTE_DEDUPLICATION] = deduplication
             alert.attributes[ATTRIBUTE_ORIGINAL_VALUE] = alert.value
             alert.value = f"{alert.resource}/{alert.event}/{alert.value if alert.value else '#NO VALUE#'}"
-        original = None if deduplication_type == DeduplicationType.ByAttribute else \
-            self.is_duplicate_original(alert)
-        if not original and deduplication:
-            select = """
-                SELECT * FROM alerts
-                 WHERE environment=%(environment)s
-                   AND attributes->>'{deduplication_attr}'='{deduplication}'
-                   AND {customer}
-                 ORDER BY last_receive_time DESC
-                """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL',
-                           deduplication_attr=ATTRIBUTE_DEDUPLICATION,
-                           deduplication=deduplication)
-            original = self._fetchone(select, vars(alert))
-            if original and original.status in (Status.Closed, Status.Expired) and alert.severity not in (
-                    Severity.Normal, Severity.Ok, Severity.Cleared):
-                # Alerts are not reopened. A new alert is created
-                return None
+
+        dedup_filter = self._deduplication_filter(deduplication_type, deduplication)
+        if not dedup_filter:
+            return
+        select = """
+            SELECT * FROM alerts
+             WHERE environment=%(environment)s
+               AND {dedup_filter}
+               AND {customer}
+          ORDER BY CASE WHEN (severity in ('normal', 'ok', 'cleared')) THEN 10
+                        ELSE 0
+                   END ASC, update_time DESC
+            """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL',
+                       dedup_filter=dedup_filter)
+        original = self._fetchone(select, vars(alert))
         if original:
-            if original.status in (Status.Closed, Status.Expired) and alert.severity not in (
-                    Severity.Normal, Severity.Ok, Severity.Cleared):
-                # Alerts are not reopened. A new one is created
+            if original.severity != alert.severity:
+                # Only deduplicate if severity is the same. If not the same => correlate
                 return None
             # If deduplicated by attribute deduplication, resource and event may be different but history is only
             # created if value or status change. So including resource and event in value forces to create history
             # if value has not changed but resource or event have.
             alert.attributes[ATTRIBUTE_ORIGINAL_ID] = original.id
             alert.attributes.pop(ATTRIBUTE_DEDUPLICATION, None)
+            logger.debug("[DEDUPLICATION] Deduplicating alert '%s' -> '%s'", alert.id, original.id)
         return original
 
     def dedup_alert(self, alert, history):
@@ -181,7 +189,7 @@ class Backend(PGBackend):
         IMPORTANT: Trend will change if severity changes but cannot be calculated without modifying alerta logic.
         """
         alert.value = alert.attributes.pop(ATTRIBUTE_ORIGINAL_VALUE, None) or alert.value
-        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID)
+        original_id = alert.attributes.pop(ATTRIBUTE_ORIGINAL_ID)
         if original_id:
             alert.history = history
             update = """
@@ -200,89 +208,114 @@ class Backend(PGBackend):
                 original_id=original_id
             )
             return self._updateone(update, vars(alert), returning=True)
-        return None
-
-    def is_correlated_original(self, alert):
-        select = """
-            SELECT * FROM alerts
-             WHERE environment=%(environment)s AND resource=%(resource)s
-               AND ((event=%(event)s AND severity!=%(severity)s)
-                OR (event!=%(event)s AND %(event)s=ANY(correlate)))
-               AND {customer}
-             ORDER BY last_receive_time DESC
-        """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL')
-        return self._fetchone(select, vars(alert))
+        logger.error("Deduplicating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
+        return alert  # should not happen
 
     def is_correlated(self, alert):
         deduplication_type = DeduplicationType(alert.attributes.get(
             ATTRIBUTE_DEDUPLICATION_TYPE, current_app.config.get(CONFIG_DEFAULT_DEDUPLICATION_TYPE, '')).lower())
-        if deduplication_type == DeduplicationType.ByAttribute:
-            return None
-        original = self.is_correlated_original(alert)
+        deduplication = self._get_deduplication_value(alert)
+        dedup_filter = self._deduplication_filter(deduplication_type, deduplication)
+        if not dedup_filter:
+            dedup_filter = 'false'
+        select = """
+            SELECT * FROM alerts
+             WHERE environment=%(environment)s
+               AND ({dedup_filter} OR (resource=%(resource)s AND event!=%(event)s AND %(event)s=ANY(correlate)))
+               AND {customer}
+          ORDER BY CASE WHEN (severity in ('normal', 'ok', 'cleared')) THEN 10
+                        ELSE 0
+                   END ASC, update_time DESC
+            """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL',
+                       dedup_filter=dedup_filter)
+        original = self._fetchone(select, vars(alert))
         if original and original.status in (Status.Closed, Status.Expired) and alert.severity not in (
                 Severity.Normal, Severity.Ok, Severity.Cleared):
             # Alerts are not reopened. A new one is created
+            logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Creating new alert '%s'",
+                         original.id, original.severity, alert.severity, alert.id)
             return None
+        if original:
+            logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Correlating received alert '%s'",
+                         original.id, original.severity, alert.severity, alert.id)
+            alert.attributes[ATTRIBUTE_ORIGINAL_ID] = original.id
+            alert.attributes.pop(ATTRIBUTE_DEDUPLICATION, None)
         return original
 
-    def get_alert_history(self, alert, page=None, page_size=None):
-        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID)
+    def correlate_alert(self, alert, history):
+        alert.value = alert.attributes.pop(ATTRIBUTE_ORIGINAL_VALUE, None) or alert.value
+        original_id = alert.attributes.pop(ATTRIBUTE_ORIGINAL_ID)
         if original_id:
-            select = """
-                SELECT resource, environment, service, "group", tags, attributes, origin, customer, h.*
-                  FROM alerts, unnest(history[1:{limit}]) h
-                 WHERE alerts.id='{original_id}'
-              ORDER BY update_time DESC
-                """.format(
-                original_id=original_id,
-                limit=current_app.config['HISTORY_LIMIT']
+            alert.history = history
+            update = """
+                UPDATE alerts
+                   SET event=%(event)s, severity=%(severity)s, status=%(status)s, service=%(service)s, value=%(value)s,
+                       text=%(text)s, create_time=%(create_time)s, timeout=%(timeout)s, raw_data=%(raw_data)s,
+                       duplicate_count=%(duplicate_count)s, repeat=%(repeat)s, previous_severity=%(previous_severity)s,
+                       trend_indication=%(trend_indication)s, receive_time=%(receive_time)s, 
+                       last_receive_id=%(last_receive_id)s, last_receive_time=%(last_receive_time)s, 
+                       tags=ARRAY(SELECT DISTINCT UNNEST(tags || %(tags)s)), attributes=attributes || %(attributes)s, 
+                       {update_time}, history=(%(history)s || history)[1:{limit}]
+                 WHERE id='{original_id}'
+             RETURNING *
+            """.format(
+                limit=current_app.config['HISTORY_LIMIT'],
+                update_time='update_time=%(update_time)s' if alert.update_time else 'update_time=update_time',
+                original_id=original_id
             )
-            return [
-                Record(
-                    id=h.id,
-                    resource=h.resource,
-                    event=h.event,
-                    environment=h.environment,
-                    severity=h.severity,
-                    status=h.status,
-                    service=h.service,
-                    group=h.group,
-                    value=h.value,
-                    text=h.text,
-                    tags=h.tags,
-                    attributes=h.attributes,
-                    origin=h.origin,
-                    update_time=h.update_time,
-                    user=getattr(h, 'user', None),
-                    timeout=getattr(h, 'timeout', None),
-                    type=h.type,
-                    customer=h.customer
-                ) for h in self._fetchall(select, vars(alert), limit=page_size, offset=(page - 1) * page_size)
-            ]
-        else:
-            return super(Backend, self).get_alert_history(alert, page, page_size)
+            return self._updateone(update, vars(alert), returning=True)
+        logger.error("Correlating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
+        return alert  # should not happen
+
+    def get_alert_history(self, alert, page=None, page_size=None):
+        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID) or alert.id
+        select = """
+            SELECT resource, environment, service, "group", tags, attributes, origin, customer, h.*
+              FROM alerts, unnest(history[1:{limit}]) h
+             WHERE alerts.id='{original_id}'
+          ORDER BY update_time DESC
+            """.format(
+            original_id=original_id,
+            limit=current_app.config['HISTORY_LIMIT']
+        )
+        return [
+            Record(
+                id=h.id,
+                resource=h.resource,
+                event=h.event,
+                environment=h.environment,
+                severity=h.severity,
+                status=h.status,
+                service=h.service,
+                group=h.group,
+                value=h.value,
+                text=h.text,
+                tags=h.tags,
+                attributes=h.attributes,
+                origin=h.origin,
+                update_time=h.update_time,
+                user=getattr(h, 'user', None),
+                timeout=getattr(h, 'timeout', None),
+                type=h.type,
+                customer=h.customer
+            ) for h in self._fetchall(select, vars(alert), limit=page_size, offset=(page - 1) * page_size)
+        ]
 
     def get_severity(self, alert):
-        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID)
-        if original_id:
-            select = """
-                SELECT severity FROM alerts
-                 WHERE alerts.id='{original_id}'
-                """.format(original_id=original_id)
-            return self._fetchone(select, vars(alert)).severity
-        else:
-            return super(Backend, self).get_severity(alert)
+        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID) or alert.id
+        select = """
+            SELECT severity FROM alerts
+             WHERE alerts.id='{original_id}'
+            """.format(original_id=original_id)
+        return self._fetchone(select, vars(alert)).severity
 
     def get_status(self, alert):
-        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID)
-        if original_id:
-            select = """
-                SELECT status FROM alerts
-                 WHERE alerts.id='{original_id}'
-                """.format(original_id=original_id)
-            return self._fetchone(select, vars(alert)).status
-        else:
-            return super(Backend, self).get_status(alert)
+        original_id = alert.attributes.get(ATTRIBUTE_ORIGINAL_ID) or alert.id
+        select = """
+            SELECT status FROM alerts
+             WHERE alerts.id='{original_id}'
+            """.format(original_id=original_id)
+        return self._fetchone(select, vars(alert)).status
 
     def is_flapping(self, alert, window=1800, count=2):
         # TODO: How to manage this with deduplication?

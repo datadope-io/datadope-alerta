@@ -21,6 +21,8 @@ DEFAULT_LOG_HANDLERS: &log_handlers
 LOGGERS_SPECIFIC: &loggers
   iometrics_alerta:
     level: DEBUG
+  alerta.database.backends.flexiblededup:
+    level: DEBUG
   alerta:
     level: *default_log_level
   flask_cors.core:

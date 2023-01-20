@@ -1,7 +1,6 @@
 import json
 import logging
 import random
-import traceback
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime
@@ -17,8 +16,16 @@ from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
 from iometrics_alerta import ContextualConfiguration as CC
-from iometrics_alerta.plugins import Alerter, AlerterStatus
-from iometrics_alerta.plugins.bgtasks import run_in_bg, revoke_task
+from . import Alerter, AlerterStatus, ATTRIBUTE_KEYS_BY_OPERATION, prepare_result, result_for_exception, \
+    has_alerting_succeeded
+from .bgtasks import revoke_task, event_task, recovery_task, repeat_task
+
+
+ALERT_TASK_BY_OPERATION = {
+    Alerter.process_event.__name__: event_task,
+    Alerter.process_recovery.__name__: recovery_task,
+    Alerter.process_repeat.__name__: repeat_task
+}
 
 
 class IOMAlerterPlugin(PluginBase, ABC):
@@ -131,16 +138,21 @@ class IOMAlerterPlugin(PluginBase, ABC):
         delay = CC.get_contextual_global_config(CC.ACTION_DELAY, alert, self, operation)[0]
         return max(0, delay - consumed_time)
 
-    def _prepare_begin_processing(self, alert, is_recovering):
+    def _prepare_begin_processing(self, alert, is_recovering, is_repeating, new_event_status: AlerterStatus):
         begin = datetime.now()
         if is_recovering:
             operation = Alerter.process_recovery.__name__
             new_status = AlerterStatus.Recovering.value
             data_field = AProcC.KEY_RECOVERY
             delay = 10.0
+        elif is_repeating:
+            operation = Alerter.process_repeat.__name__
+            new_status = AlerterStatus.Repeating.value
+            data_field = AProcC.KEY_REPEAT
+            delay = 10.0
         else:
             operation = Alerter.process_event.__name__
-            new_status = AlerterStatus.Scheduled.value
+            new_status = new_event_status.value
             data_field = AProcC.KEY_NEW_EVENT
             delay = self.get_processing_delay(alert, operation)
         delay = max(10.0, delay) + random.uniform(-5.0, 5.0)  # +/- 5 secs for the configured delay (min config = 10)
@@ -150,56 +162,14 @@ class IOMAlerterPlugin(PluginBase, ABC):
         return attr_data, self.alerter_attribute_name, attr_data[data_field], begin, operation, delay
 
     @staticmethod
-    def prepare_result(operation: str,
-                       retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
-                       start_time: datetime = None, end_time: datetime = None, duration: float = None,
-                       new_status=None) -> Tuple[bool, Dict[str, Any]]:
-        if operation == Alerter.process_event.__name__:
-            new_status = new_status or AlerterStatus.Processed
-            data_field = AProcC.KEY_NEW_EVENT
-        else:
-            new_status = new_status or AlerterStatus.Recovered
-            data_field = AProcC.KEY_RECOVERY
-        if isinstance(retval, tuple):
-            result = {
-                AProcC.FIELD_SUCCESS: retval[0],
-                AProcC.FIELD_RESPONSE: retval[1]
-            }
-        else:
-            result = {
-                AProcC.FIELD_SUCCESS: True,
-                AProcC.FIELD_RESPONSE: retval
-            }
-        if start_time:
-            result[AProcC.FIELD_START] = DateTime.iso8601_utc(start_time)
-        if end_time:
-            result[AProcC.FIELD_END] = DateTime.iso8601_utc(end_time)
-        if duration is None and start_time is not None and end_time is not None:
-            duration = (end_time - start_time).total_seconds()
-        if duration is not None:
-            result[AProcC.FIELD_ELAPSED] = duration
-        return result[AProcC.FIELD_SUCCESS], {
-                AProcC.FIELD_STATUS: new_status,
-                data_field: result
-        }
-
-    @staticmethod
-    def result_for_exception(exc, einfo=None):
-        if exc is None and einfo is None:
-            try:
-                raise Exception('Failure without exception')
-            except Exception as e:
-                exc = e
-        return {
-            'reason': 'exception',
-            'info': {
-                'message': str(einfo.exception if einfo else exc),
-                'type': (einfo.type if einfo else type(exc)).__name__,
-                'traceback': einfo.traceback if einfo else ''.join(traceback.format_exception(type(exc),
-                                                                                              exc,
-                                                                                              exc.__traceback__))
-            }
-        }
+    def _prepare_result(operation: str,
+                        retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
+                        start_time: datetime = None, end_time: datetime = None,
+                        duration: float = None) -> Tuple[bool, Dict[str, Any]]:
+        status = AlerterStatus.Recovered if operation == Alerter.process_recovery.__name__ \
+            else AlerterStatus.Processed
+        data_field = ATTRIBUTE_KEYS_BY_OPERATION[operation]
+        return prepare_result(status, data_field, retval, start_time, end_time, duration)
 
     def _prepare_recovery_special_result(self, alert, result_data, start_time):
         attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
@@ -208,6 +178,48 @@ class IOMAlerterPlugin(PluginBase, ABC):
         recovery_data[AProcC.FIELD_RECEIVED] = DateTime.iso8601_utc(start_time)
         recovery_data[AProcC.FIELD_SUCCESS] = True
         recovery_data[AProcC.FIELD_RESPONSE] = result_data
+
+    def _get_last_repeat_time(self, alert):
+        attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
+        last = attr_data.get(AProcC.KEY_REPEAT, {}).get(AProcC.FIELD_RECEIVED) \
+            or attr_data.get(AProcC.KEY_NEW_EVENT, {}).get(AProcC.FIELD_RECEIVED)
+        if last:
+            return DateTime.parse(last)
+        else:
+            return DateTime.make_aware_utc(datetime.now())
+
+    def _prepare_post_receive(self, alert, new_event_status: AlerterStatus, kwargs):
+        self.global_app_config = kwargs['config']
+        force_recovery = kwargs.get('force_recovery', False)
+        recovering = force_recovery or alert.status == Status.Closed
+        alerter_status = self.get_alerter_status_for_alert(alert)
+        repeating = not recovering and alerter_status == AlerterStatus.Processed
+        if repeating:
+            success = has_alerting_succeeded(alert, self.alerter_attribute_name)
+            if success:
+                repeating_interval = CC.get_contextual_global_config(CC.REPEAT_MIN_INTERVAL, alert, self)[0]
+                if repeating_interval:
+                    last_repetition = self._get_last_repeat_time(alert)
+                    now = DateTime.make_aware_utc(datetime.now())
+                    repeating = (now - last_repetition).total_seconds() > repeating_interval
+                    if not repeating:
+                        self.logger.debug("%s: Not repeating. Interval among repetitions not reached.",
+                                          self.alerter_name)
+                else:
+                    repeating = False
+                    self.logger.debug("%s: Not repeating. Repetition is deactivated.",
+                                      self.alerter_name)
+            else:
+                self.logger.debug("%s: Not repeating a failed alerting", self.alerter_name)
+                repeating = False
+        if alert.repeat and not recovering and not repeating and alerter_status != AlerterStatus.New:
+            self.logger.info("%s: Ignoring repetition of alert %s", self.alerter_name, alert.id)
+            return None
+        self.logger.debug("%s: Entering post_receive method for alert '%s'", self.alerter_name, alert.id)
+        reason = kwargs.get('reason') or alert.text
+        attr_data, attribute_name, event_data, begin, operation, delay = self._prepare_begin_processing(
+            alert, is_recovering=recovering, is_repeating=repeating, new_event_status=new_event_status)
+        return attr_data, begin, delay, event_data, operation, reason, attribute_name
 
     #
     # PluginBase ABSTRACT METHODS IMPLEMENTATION
@@ -218,33 +230,32 @@ class IOMAlerterPlugin(PluginBase, ABC):
         return alert
 
     def post_receive(self, alert: Alert, **kwargs) -> Optional[Alert]:
-        self.global_app_config = kwargs['config']
-        force_recovery = kwargs.get('force_recovery', False)
-        recovering = force_recovery or alert.status == Status.Closed
-        alerter_status = self.get_alerter_status_for_alert(alert)
-        if alert.repeat and not recovering and alerter_status != AlerterStatus.New:
-            self.logger.info("%s: Ignoring repetition of alert %s", self.name, alert.id)
+        post_receive_data = self._prepare_post_receive(alert, AlerterStatus.Scheduled, kwargs)
+        if post_receive_data:
+            attr_data, begin, delay, event_data, operation, reason, _ = post_receive_data
+        else:
             return None
-        self.logger.debug("Entering post_receive method for alert '%s'", alert.id)
-        reason = kwargs.get('reason') or alert.text
-        attr_data, attribute_name, event_data, begin, operation, delay = self._prepare_begin_processing(
-            alert, is_recovering=recovering)
+
+        store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,
+                                                          alert, self, operation)[0]
         try:
             task_specification = self.get_task_specification(alert, operation)
-            task = run_in_bg.apply_async(
-                kwargs=dict(alerter_data=self.alerter_data, alert=alert, operation=operation, reason=reason),
-                countdown=round(delay), **task_specification)
+            task_instance = ALERT_TASK_BY_OPERATION[operation]
+            task = task_instance.apply_async(
+                kwargs=dict(alerter_data=self.alerter_data, alert=alert, reason=reason),
+                countdown=round(delay), **task_specification, include_traceback=store_traceback)
             self.logger.info("Scheduled task '%s' to run in %.0f seconds in queue '%s'",
                              task.id, delay, task_specification.get('queue', '<default>'))
             event_data[AProcC.FIELD_BG_TASK_ID] = task.id
             # Attributes modification will be stored automatically at return
         except Exception as e:
-            self.logger.error("Error executing post_receive for plugin '%s': %s", self.name, e, exc_info=e)
+            self.logger.error("%s: Error executing post_receive: %s",
+                              self.alerter_name, e, exc_info=e)
             now = datetime.now()
-            retval = False, self.result_for_exception(e)
-            success, new_attr_data = IOMAlerterPlugin.prepare_result(operation=operation, retval=retval,
-                                                                     start_time=begin, end_time=now,
-                                                                     duration=(now-begin).total_seconds())
+            retval = False, result_for_exception(e, include_traceback=store_traceback)
+            success, new_attr_data = IOMAlerterPlugin._prepare_result(operation=operation, retval=retval,
+                                                                      start_time=begin, end_time=now,
+                                                                      duration=(now-begin).total_seconds())
             merge(attr_data, new_attr_data)
             # Attributes modification will be stored automatically at return
         return alert
@@ -258,15 +269,14 @@ class IOMAlerterPlugin(PluginBase, ABC):
         if status == Status.Closed:
             ignore_recovery, level = CC.get_contextual_global_config(CC.IGNORE_RECOVERY, alert, self)
             if alerter_status == AlerterStatus.Scheduled:
-                self.logger.debug("Status changed to closed while waiting to alert. Revoking alert task.")
                 bgtask_id = alert.attributes.get(self.alerter_attribute_name, {})\
                     .get(AProcC.KEY_NEW_EVENT, {}).get(AProcC.FIELD_BG_TASK_ID)
                 if bgtask_id:
                     revoke_task(bgtask_id)
-                    self.logger.info("Status changed to closed while waiting to alert. Revoking alert task %s.",
-                                     bgtask_id)
+                    self.logger.info("%s: Status changed to closed while waiting to alert. Revoking alert task %s.",
+                                     self.alerter_name, bgtask_id)
                 else:
-                    self.logger.warning("BGTASK ID NOT FOUND FOR ALERTER: %s, ALERT: %s",
+                    self.logger.warning("%s: BGTASK ID NOT FOUND, ALERT: %s",
                                         self.alerter_name, alert.id)
                 start_time = datetime.now()
                 result_data = {"info": {"message": "RECOVERED BEFORE ALERTING"}}
@@ -277,35 +287,37 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 # Attributes modification will be stored automatically at return
                 return alert, status, text
             elif ignore_recovery:
-                self.logger.info("Ignoring recovery configured with context '%s', for alert '%s'",
-                                 level.value, alert.id)
+                self.logger.info("%s: Ignoring recovery configured with context '%s', for alert '%s'",
+                                 self.alerter_name, level.value, alert.id)
                 start_time = datetime.now()
                 result_data = {"info": {"message": "IGNORED RECOVERY"}}
                 self._prepare_recovery_special_result(alert, result_data, start_time)
                 # Attributes modification will be stored automatically at return
                 return alert, status, text
             elif alerter_status == AlerterStatus.Processed:
-                success = alert.attributes.get(self.alerter_attribute_name, {}) \
-                    .get(AProcC.KEY_NEW_EVENT, {}).get(AProcC.FIELD_SUCCESS, False)
+                success = has_alerting_succeeded(alert, self.alerter_attribute_name)
                 if success:
-                    self.logger.debug("Status changed to closed for an alerted event. Recovering")
+                    self.logger.info("%s: Status changed to closed for an alerted event. Recovering",
+                                     self.alerter_name)
                     return self.post_receive(alert, reason=text, force_recovery=True, **kwargs), status, text
                 else:
-                    self.logger.debug("Status changed to closed for an event that fails alerting. Ignoring")
+                    self.logger.info("%s: Status changed to closed for an event that fails alerting. Ignoring",
+                                     self.alerter_name)
                     start_time = datetime.now()
                     result_data = {"info": {"message": "RECOVERED AND ALERT WITH ERROR IN THE ALERTING"}}
                     self._prepare_recovery_special_result(alert, result_data, start_time)
                     # Attributes modification will be stored automatically at return
                     return alert, status, text
-            elif alerter_status == AlerterStatus.Processing:
+            elif alerter_status in (AlerterStatus.Processing, AlerterStatus.Repeating):
                 # Alert will be recovered in the processing task after finish of processing.
-                # If processing finishes ok, the recover will be launched at the end of the task.
+                # If processing finishes ok, or it is a repeating task
+                # the recovery will be launched at the end of the task.
                 # If processing finishes nok or is going to retry,
                 # the recovery will be ignored as alert is supposed to not being notified
-                self.logger.debug("Status changed to closed while processing alerting."
-                                  " Recovering after finish processing.")
+                self.logger.info("%s: Status changed to closed while processing alerting."
+                                 " Recovering after finish processing.", self.alerter_name)
                 attr_data, _, _, _, _, _ = self._prepare_begin_processing(
-                    alert, is_recovering=True)
+                    alert, is_recovering=True, is_repeating=False, new_event_status=AlerterStatus.Scheduled)
                 task_definition = self.get_task_specification(alert, Alerter.process_recovery.__name__)
                 attr_data[AProcC.FIELD_TEMP_RECOVERY_DATA] = {
                     AProcC.FIELD_TEMP_RECOVERY_DATA_TASK_DEF: task_definition,
@@ -313,7 +325,8 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 }
                 return alert, status, text
             elif alerter_status in (AlerterStatus.Recovered, AlerterStatus.Recovering):
-                self.logger.debug("Status changed to closed for an already recovered event. Ignoring.")
+                self.logger.debug("%s: Status changed to closed for an already recovered event. Ignoring.",
+                                  self.alerter_name)
                 return None
             else:
                 return None
@@ -337,19 +350,11 @@ class IOMAlerterPlugin(PluginBase, ABC):
 class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
 
     def post_receive(self, alert: Alert, **kwargs) -> Optional[Alert]:
-        self.global_app_config = kwargs['config']
-        force_recovery = kwargs.get('force_recovery', False)
-        recovering = force_recovery or alert.status == Status.Closed
-        alerter_status = self.get_alerter_status_for_alert(alert)
-        if alert.repeat and not recovering and alerter_status != AlerterStatus.New:
-            self.logger.info("%s: Ignoring repetition of alert %s", self.name, alert.id)
+        post_receive_data = self._prepare_post_receive(alert, AlerterStatus.Processing, kwargs)
+        if post_receive_data:
+            attr_data, begin, delay, event_data, operation, reason, attribute_name = post_receive_data
+        else:
             return None
-        self.logger.debug("Entering post_receive method for alert '%s'", alert.id)
-        reason = kwargs.get('reason') or alert.text
-        attr_data, attribute_name, _, begin, operation, _ = self._prepare_begin_processing(
-            alert, is_recovering=recovering)
-        if not recovering:
-            attr_data[AProcC.FIELD_STATUS] = AlerterStatus.Processing.value
         alert.update_attributes({attribute_name: attr_data})
         alerter_class = self.alerter_data[BGTadC.CLASS]
         response = {}
@@ -357,16 +362,24 @@ class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
             alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG])
             response = getattr(alerter, operation)(alert, reason)
         except Exception as exc:
-            response = False, self.result_for_exception(exc)
-            self.logger.error("Error executing post_receive for plugin '%s': %s", self.name, exc, exc_info=exc)
+            store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,
+                                                              alert, self, operation)[0]
+            response = False, result_for_exception(exc, include_traceback=store_traceback)
+            self.logger.error("%s: Error executing post_receive: %s", self.alerter_name, exc, exc_info=exc)
         finally:
             now = datetime.now()
             duration = (now - begin).total_seconds()
-            success, new_attr_data = IOMAlerterPlugin.prepare_result(operation=operation, retval=response,
-                                                                     start_time=begin, end_time=now, duration=duration)
-            self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s FOR ALERT '%s' IN %s:%s -> %s",
-                             duration, 'SUCCESS' if success else 'FAILURE', alert.id,
-                             self.alerter_name, operation, response)
+            success, new_attr_data = IOMAlerterPlugin._prepare_result(operation=operation, retval=response,
+                                                                      start_time=begin, end_time=now, duration=duration)
+            self.logger.info("%s: %s FINISHED IN %.3f sec. RESULT %s FOR ALERT '%s' -> %s",
+                             self.alerter_name, operation, duration,
+                             'SUCCESS' if success else 'FAILURE', alert.id, response)
             merge(attr_data, new_attr_data)
             # Attributes modification will be stored automatically at return
         return alert
+
+    # No need to override status_change.
+    # For synchronous plugins, status_change will be executed with alerter status = Processed and
+    # parent class implementation will call post_receive sync implementation or do nothing if alerting failed.
+    # def status_change(self, alert: Alert, status, text: str, **kwargs) -> Any:
+    #     return super().status_change(alert, status, text, **kwargs)

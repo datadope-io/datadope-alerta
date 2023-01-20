@@ -38,6 +38,9 @@ class TestAlerter(Alerter):
         logger.info("Test: End recovery")
         return True, {'test_recovery': 'ok'}
 
+    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        return True, {}
+
 
 class TestPlugin(IOMSyncAlerterPlugin):
 
