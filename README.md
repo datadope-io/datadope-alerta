@@ -94,6 +94,7 @@ launched.
 | ignoreRecovery    | bool                  | Alerter |                                                                |
 | actionDelay       | float                 | Alerter |                                                                | 
 | tasksDefinition   | dict \ json           | Alerter |                                                                |
+| repeatMinInterval | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event   |
 
 Scope 'Alerter' means that the attribute value may be defined specifically for every alerter 
 while 'Global' means that the same value will be used independently of the alerter.

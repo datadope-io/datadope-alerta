@@ -67,8 +67,8 @@ def rules(alert, plugins, config):  # noqa
                     # If alerter has already managed the recovery: ignore
                     logger.info("Alerter %s already sent recovery for '%s'", alerter, alert)
                     continue
-                if alerter_status != AlerterStatus.New and alert.status != Status.Closed:
-                    # If alerter is processing or has processed the alert and alert is not closed: ignore
+                if alerter_status not in (AlerterStatus.New, AlerterStatus.Processed) and alert.status != Status.Closed:
+                    # If alerter is processing the alert and alert is not closed: ignore
                     logger.info("Alerter %s already sent '%s'", alerter, alert)
                     continue
                 if alerter_status == AlerterStatus.New and alert.status == Status.Closed:

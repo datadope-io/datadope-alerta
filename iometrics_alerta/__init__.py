@@ -53,7 +53,8 @@ no alerter should be notified. It is the same of an empty array in that attribut
 
 ALERTERS_TASK_BY_OPERATION = {
     'process_event': 'new',
-    'process_recovery': 'recovery'
+    'process_recovery': 'recovery',
+    'process_repeat': 'repeat'
 }
 """
 Defines the task name for each operation. This name will be used as 
@@ -126,6 +127,11 @@ class AlerterProcessAttributeConstant:
     KEY_RECOVERY = ALERTERS_TASK_BY_OPERATION['process_recovery']
     """
     Key name in the alerter attribute where processing info of the recovery is stored.
+    """
+
+    KEY_REPEAT = ALERTERS_TASK_BY_OPERATION['process_repeat']
+    """
+    Key name in the alerter attribute where processing info of the repeat is stored.
     """
 
     # Field names of the info to store about the event/recovery processing.
@@ -445,7 +451,7 @@ class ContextualConfiguration(object):
         ALERTERS_TASK_BY_OPERATION['process_event']: {'queue': 'alert', 'priority': 1, 'retry_spec': {
             'max_retries': 32,
             'exponential': True,
-            'interval_first': 2.0,  # First retry after 10 secs
+            'interval_first': 2.0,  # First retry after 2 secs
             'interval_step': 5.0,  # Only for exponential = false
             'interval_max': 10.0 * 60,  # Max interval 10 min
             'jitter': False  # If true, random seconds between 0 and exponential calculated time
@@ -457,6 +463,14 @@ class ContextualConfiguration(object):
             'interval_step': 5.0,  # Only for exponential = false
             'interval_max': 10.0 * 60,  # Max interval 10 min
             'jitter': False  # If true, random seconds between 0 and exponential calculated time
+        }},
+        ALERTERS_TASK_BY_OPERATION['process_repeat']: {'queue': 'repeat', 'priority': 7, 'retry_spec': {
+            'max_retries': 2,
+            'exponential': True,
+            'interval_first': 2.0,  # First retry after 2 secs
+            'interval_step': 5.0,  # Only for exponential = false
+            'interval_max': 10.0 * 60,  # Max interval 10 min
+            'jitter': True  # If true, random seconds between 0 and exponential calculated time
         }}
     })
     """
@@ -477,6 +491,16 @@ class ContextualConfiguration(object):
         
         In both cases, if jitter is True, the actual interval will be a random instant between 0 
         and the interval calculated with the previous formula.
+    """
+
+    REPEAT_MIN_INTERVAL = VarDefinition('REPEAT_MIN_INTERVAL', 0.0)
+    """
+    Minimum interval after last processing init time to send a repeat event.
+    """
+
+    STORE_TRACEBACK_ON_EXCEPTION = VarDefinition('STORE_TRACEBACK_ON_EXCEPTION', False)
+    """
+    If True, stores the exception traceback in the alerter result attribute
     """
 
     @staticmethod
