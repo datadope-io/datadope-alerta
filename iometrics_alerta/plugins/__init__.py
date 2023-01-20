@@ -152,7 +152,7 @@ ATTRIBUTE_KEYS_BY_OPERATION = {
 def prepare_result(status: AlerterStatus, data_field: str,
                    retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
                    start_time: datetime = None, end_time: datetime = None,
-                   duration: float = None) -> Tuple[bool, Dict[str, Any]]:
+                   duration: float = None, skipped: bool = None, retries: int = None) -> Tuple[bool, Dict[str, Any]]:
     if isinstance(retval, tuple):
         result = {
             AlerterProcessAttributeConstant.FIELD_SUCCESS: retval[0],
@@ -171,6 +171,10 @@ def prepare_result(status: AlerterStatus, data_field: str,
         duration = (end_time - start_time).total_seconds()
     if duration is not None:
         result[AlerterProcessAttributeConstant.FIELD_ELAPSED] = duration
+    if skipped is not None:
+        result[AlerterProcessAttributeConstant.FIELD_SKIPPED] = skipped
+    if retries:
+        result[AlerterProcessAttributeConstant.FIELD_RETRIES] = retries
     return result[AlerterProcessAttributeConstant.FIELD_SUCCESS], {
             AlerterProcessAttributeConstant.FIELD_STATUS: status.value,
             data_field: result

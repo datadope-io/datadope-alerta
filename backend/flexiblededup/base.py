@@ -112,7 +112,8 @@ class Backend(PGBackend):
             alert.value = alert.attributes.pop(ATTRIBUTE_ORIGINAL_VALUE, None) or alert.value
         return super(Backend, self).create_alert(alert)
 
-    def set_alert(self, id_, severity, status, tags, attributes, timeout, previous_severity, update_time, history=None):
+    # noinspection PyShadowingBuiltins
+    def set_alert(self, id, severity, status, tags, attributes, timeout, previous_severity, update_time, history=None):
         update = """
             UPDATE alerts
                SET severity=%(severity)s, status=%(status)s, tags=ARRAY(SELECT DISTINCT UNNEST(tags || %(tags)s)),
@@ -122,7 +123,7 @@ class Backend(PGBackend):
              WHERE id=%(id)s OR id LIKE %(like_id)s
          RETURNING *
         """.format(limit=current_app.config['HISTORY_LIMIT'])
-        return self._updateone(update, {'id': id_, 'like_id': id_ + '%', 'severity': severity, 'status': status,
+        return self._updateone(update, {'id': id, 'like_id': id + '%', 'severity': severity, 'status': status,
                                         'tags': tags, 'attributes': attributes, 'timeout': timeout,
                                         'previous_severity': previous_severity, 'update_time': update_time,
                                         'change': history}, returning=True)

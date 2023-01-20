@@ -37,6 +37,15 @@ class Task(AlertTask):
             self._time_management.pop(task_id, None)
             self.update_state(state=states.IGNORED)
             raise Ignore()
+        if self.request.retries == 0:
+            result_dict = alerter_attr_data.setdefault(self.get_data_field(), {})
+            result_dict.update({
+                AProcC.FIELD_SUCCESS: None,
+                AProcC.FIELD_END: None,
+                AProcC.FIELD_RESPONSE: None,
+                AProcC.FIELD_ELAPSED: None,
+                AProcC.FIELD_REPETITIONS: result_dict.get(AProcC.FIELD_REPETITIONS, 0) + 1
+            })
         return AlerterStatus.Repeating
 
     def on_success_operation(self, alert, alerter_attr_data, current_status, kwargs):

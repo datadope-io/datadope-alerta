@@ -134,9 +134,10 @@ class AlertTask(celery.Task, ABC):
 
     @classmethod
     def _prepare_result(cls, status: AlerterStatus, retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
-                        start_time: datetime = None, end_time: datetime = None,
-                        duration: float = None) -> Tuple[bool, Dict[str, Any]]:
-        return prepare_result(status, cls.get_data_field(), retval, start_time, end_time, duration)
+                        start_time: datetime = None, end_time: datetime = None, duration: float = None,
+                        skipped: bool = None, retries: int = None) -> Tuple[bool, Dict[str, Any]]:
+        return prepare_result(status, cls.get_data_field(), retval, start_time, end_time, duration,
+                              skipped, retries)
 
     @classmethod
     def _update_alerter_attribute(cls, alert, alerter_name, attribute_data, update_db=True,
@@ -162,7 +163,8 @@ class AlertTask(celery.Task, ABC):
         if (duration is None or duration == 0.0) and start_time is not None and end_time is not None:
             duration = DateTime.diff_seconds_utc(end_time, start_time)
         success, attribute_data = self._prepare_result(status=status, retval=retval, start_time=start_time,
-                                                       end_time=end_time, duration=duration)
+                                                       end_time=end_time, duration=duration,
+                                                       retries=self.request.retries)
         self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s FOR ALERT '%s' IN %s:%s -> %s",
                          duration, 'SUCCESS' if success else 'FAILURE', alert.id, alerter_name,
                          self.get_operation(), retval)
@@ -186,11 +188,13 @@ class AlertTask(celery.Task, ABC):
             current_status = AlerterStatus(alerter_attr_data.get(AProcC.FIELD_STATUS))
             new_status = self.before_start_operation(task_id, alert_obj, alerter_name, alerter_attr_data,
                                                      current_status, kwargs)
-            if not is_retrying:
+            if is_retrying:
+                alerter_attr_data.setdefault(self.get_data_field(), {})[AProcC.FIELD_RETRIES] = self.request.retries
+            else:
                 alerter_attr_data[AProcC.FIELD_STATUS] = new_status.value
                 alerter_attr_data.setdefault(self.get_data_field(), {})[AProcC.FIELD_START] = DateTime.iso8601_utc(
                     start_time)
-                alert_obj.update_attributes({attribute_name: alerter_attr_data})
+            alert_obj.update_attributes({attribute_name: alerter_attr_data})
 
     def on_success(self, retval, task_id, args, kwargs):  # noqa
         try:

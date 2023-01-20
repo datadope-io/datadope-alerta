@@ -18,7 +18,8 @@ class Task(AlertTask):
                                            retval=recovery_retval,
                                            start_time=None,
                                            end_time=None,
-                                           duration=None)
+                                           duration=None,
+                                           skipped=True)
         self._update_alerter_attribute(alert, alerter_name, attribute_data, remove_temp_recovery_data_attr=True)
 
     @staticmethod

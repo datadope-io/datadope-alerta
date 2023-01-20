@@ -165,11 +165,11 @@ class IOMAlerterPlugin(PluginBase, ABC):
     def _prepare_result(operation: str,
                         retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
                         start_time: datetime = None, end_time: datetime = None,
-                        duration: float = None) -> Tuple[bool, Dict[str, Any]]:
+                        duration: float = None, skipped: bool = None) -> Tuple[bool, Dict[str, Any]]:
         status = AlerterStatus.Recovered if operation == Alerter.process_recovery.__name__ \
             else AlerterStatus.Processed
         data_field = ATTRIBUTE_KEYS_BY_OPERATION[operation]
-        return prepare_result(status, data_field, retval, start_time, end_time, duration)
+        return prepare_result(status, data_field, retval, start_time, end_time, duration, skipped)
 
     def _prepare_recovery_special_result(self, alert, result_data, start_time):
         attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
@@ -178,6 +178,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         recovery_data[AProcC.FIELD_RECEIVED] = DateTime.iso8601_utc(start_time)
         recovery_data[AProcC.FIELD_SUCCESS] = True
         recovery_data[AProcC.FIELD_RESPONSE] = result_data
+        recovery_data[AProcC.FIELD_SKIPPED] = True
 
     def _get_last_repeat_time(self, alert):
         attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
@@ -284,6 +285,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 event_data = alert.attributes[self.alerter_attribute_name].setdefault(AProcC.KEY_NEW_EVENT, {})
                 event_data[AProcC.FIELD_SUCCESS] = True
                 event_data[AProcC.FIELD_RESPONSE] = result_data
+                event_data[AProcC.FIELD_SKIPPED] = True
                 # Attributes modification will be stored automatically at return
                 return alert, status, text
             elif ignore_recovery:
