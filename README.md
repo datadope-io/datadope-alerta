@@ -95,9 +95,25 @@ launched.
 | actionDelay       | float                 | Alerter |                                                                | 
 | tasksDefinition   | dict \ json           | Alerter |                                                                |
 | repeatMinInterval | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event   |
+| recoveryActions   | dict \ json           | Global  | Recovery actions definition                                    |
 
 Scope 'Alerter' means that the attribute value may be defined specifically for every alerter 
 while 'Global' means that the same value will be used independently of the alerter.
+
+## Recovery actions
+
+A plugin is provided to execute recovery actions before alerting. 
+
+This plugin will use one of the configured recovery actions providers to execute some recovery action before alerting.
+Available recovery actions are read from python `entry_points` with type `alerta.recovery_actions.providers`.
+
+AWX provider is provided as part of this python library.
+
+Recovery action plugin is executed if the attribute `recoveryActions` is present as part of an alert.
+In this case, configured alerters are not launched after receiving the alert but this recovery actions plugins is 
+launched instead. It will be in charge of executing the configured recovery actions using the selected provider.
+After actions are executed it will leave some time to the alert to be recovered. If the alert is not closed during
+that time, it will launch the configured alerters.
 
 
 ## Deployment
@@ -128,6 +144,8 @@ pipenv install iometrics-alerta/dist/iometrics_alerta-1.0.0-py3-none-any.whl
 Or may be included in the Alerta deployment Pipfile.
 
 ## Full Alerta environment deployment
+
+**Minimum Python version is 3.10**
 
 ### Pipfile
 
@@ -170,6 +188,15 @@ file.
 
 See [Alerta configuration documentation](https://docs.alerta.io/configuration.html) to get more information about
 configuration options.
+
+#### Configuration for Recovery Actions Providers
+
+Use `RA_PROVIDER_<provider>_CONFIG` to provide a dictionary with the provider configuration. 
+For example `RA_PROVIDER_AWX_CONFIG` will be the expected configuration for awx provider.
+
+Configuration may be provided in alertad.conf config file and/or environment variables. If both
+provided, a merge will be done, having more priority the configuration from environment variables.
+
 
 ## Executing Alerta Server
 

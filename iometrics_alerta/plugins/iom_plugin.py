@@ -138,7 +138,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         delay = CC.get_contextual_global_config(CC.ACTION_DELAY, alert, self, operation)[0]
         return max(0, delay - consumed_time)
 
-    def _prepare_begin_processing(self, alert, is_recovering, is_repeating, new_event_status: AlerterStatus):
+    def _prepare_begin_processing(self, alert, is_recovering, is_repeating, new_event_status: AlerterStatus, reason):
         begin = datetime.now()
         if is_recovering:
             operation = Alerter.process_recovery.__name__
@@ -159,6 +159,8 @@ class IOMAlerterPlugin(PluginBase, ABC):
         attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
         attr_data[AProcC.FIELD_STATUS] = new_status
         attr_data.setdefault(data_field, {})[AProcC.FIELD_RECEIVED] = DateTime.iso8601_utc(begin)
+        reason = reason or CC.get_contextual_global_config(CC.REASON, alert, self, operation)[0]
+        attr_data.setdefault(data_field, {})[AProcC.FIELD_REASON] = reason
         return attr_data, self.alerter_attribute_name, attr_data[data_field], begin, operation, delay
 
     @staticmethod
@@ -192,10 +194,12 @@ class IOMAlerterPlugin(PluginBase, ABC):
     def _prepare_post_receive(self, alert, new_event_status: AlerterStatus, kwargs):
         self.global_app_config = kwargs['config']
         force_recovery = kwargs.get('force_recovery', False)
+        force_repeat = kwargs.get('force_repeat', False)
         recovering = force_recovery or alert.status == Status.Closed
         alerter_status = self.get_alerter_status_for_alert(alert)
         repeating = not recovering and alerter_status == AlerterStatus.Processed
-        if repeating:
+        if repeating and not force_repeat:
+            # Is repeating but check if the interval is good
             success = has_alerting_succeeded(alert, self.alerter_attribute_name)
             if success:
                 repeating_interval = CC.get_contextual_global_config(CC.REPEAT_MIN_INTERVAL, alert, self)[0]
@@ -219,7 +223,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         self.logger.debug("%s: Entering post_receive method for alert '%s'", self.alerter_name, alert.id)
         reason = kwargs.get('reason') or alert.text
         attr_data, attribute_name, event_data, begin, operation, delay = self._prepare_begin_processing(
-            alert, is_recovering=recovering, is_repeating=repeating, new_event_status=new_event_status)
+            alert, is_recovering=recovering, is_repeating=repeating, new_event_status=new_event_status, reason=reason)
         return attr_data, begin, delay, event_data, operation, reason, attribute_name
 
     #
@@ -231,9 +235,21 @@ class IOMAlerterPlugin(PluginBase, ABC):
         return alert
 
     def post_receive(self, alert: Alert, **kwargs) -> Optional[Alert]:
+        """
+        Supported kwargs:
+          * config: used by Alerta. Always expected.
+          * force_recovery: If True consider always a recovery operation.
+          * ignore_delay: if True, background task will be executed immediately (after 2 seconds).
+          * reason: reason of the invocation. May be used by alerters recovery operations.
+
+        :param alert:
+        :param kwargs:
+        :return:
+        """
         post_receive_data = self._prepare_post_receive(alert, AlerterStatus.Scheduled, kwargs)
         if post_receive_data:
             attr_data, begin, delay, event_data, operation, reason, _ = post_receive_data
+            delay = 2 if kwargs.get('ignore_delay', False) else delay
         else:
             return None
 
@@ -319,7 +335,8 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 self.logger.info("%s: Status changed to closed while processing alerting."
                                  " Recovering after finish processing.", self.alerter_name)
                 attr_data, _, _, _, _, _ = self._prepare_begin_processing(
-                    alert, is_recovering=True, is_repeating=False, new_event_status=AlerterStatus.Scheduled)
+                    alert, is_recovering=True, is_repeating=False, new_event_status=AlerterStatus.Scheduled,
+                    reason=text)
                 task_definition = self.get_task_specification(alert, Alerter.process_recovery.__name__)
                 attr_data[AProcC.FIELD_TEMP_RECOVERY_DATA] = {
                     AProcC.FIELD_TEMP_RECOVERY_DATA_TASK_DEF: task_definition,
