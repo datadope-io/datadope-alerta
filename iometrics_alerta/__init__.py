@@ -5,7 +5,7 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, List
 
 from dateutil import parser
 # noinspection PyPackageRequirements
@@ -14,6 +14,7 @@ import flask
 import jinja2
 import pytz
 
+from alerta.models.alert import Alert
 from alerta.utils.format import CustomJSONEncoder as AlertaCustomJSONEncoder
 
 
@@ -70,6 +71,9 @@ Defines the location of templates for alerters.
 
 May be overriden by configuration.
 """
+
+
+processed_environment: Optional['ConfigKeyDict'] = None
 
 
 def get_task_name(operation):
@@ -146,6 +150,7 @@ class AlerterProcessAttributeConstant:
     FIELD_SKIPPED = 'skipped'
     FIELD_RETRIES = 'retries'
     FIELD_REPETITIONS = 'repetitions'
+    FIELD_REASON = 'reason'
     FIELD_TEMP_RECOVERY_DATA = '_tmp_recovery_data'
     FIELD_TEMP_RECOVERY_DATA_TEXT = 'text'
     FIELD_TEMP_RECOVERY_DATA_TASK_DEF = 'task_def'
@@ -250,7 +255,7 @@ def to_camel_case(snake_str):
     return components[0].lower() + ''.join(x.title() for x in components[1:])
 
 
-def safe_convert(value, type_, operation=None):
+def safe_convert(value, type_, operation=None) -> Any:
     if value is None:
         return value
     key = None
@@ -303,21 +308,21 @@ class ConfigKeyDict(MutableMapping):
         self.update(dict(*args, **kwargs))  # use the free update to set keys
 
     def __getitem__(self, key):
-        return self.store[self._key_transform(key)]
+        return self.store[self.key_transform(key)]
 
     def __setitem__(self, key, value):
-        new_key = self._key_transform(key)
+        new_key = self.key_transform(key)
         self.store[new_key] = value
         if new_key not in self.keys_store:
             self.keys_store[new_key] = key
 
     def __delitem__(self, key):
-        new_key = self._key_transform(key)
+        new_key = self.key_transform(key)
         del self.store[new_key]
         del self.keys_store[new_key]
 
     def __contains__(self, key):
-        new_key = self._key_transform(key)
+        new_key = self.key_transform(key)
         return new_key in self.store
 
     def __iter__(self):
@@ -333,7 +338,7 @@ class ConfigKeyDict(MutableMapping):
         return self.store.__str__()
 
     @staticmethod
-    def _key_transform(key):
+    def key_transform(key):
         if isinstance(key, str):
             return key.replace('_', '').replace('-', '').replace('.', '').replace(' ', '').lower()
         return key
@@ -346,8 +351,11 @@ class ConfigKeyDict(MutableMapping):
         return self.get(key, default=default)
 
     def original_key(self, key):
-        new_key = self._key_transform(key)
+        new_key = self.key_transform(key)
         return self.keys_store.get(new_key)
+
+    def normalized(self) -> dict:
+        return self.store
 
 
 class ConfigurationContext(str, Enum):
@@ -366,7 +374,47 @@ class VarDefinition:
     default: Any = None
     specific_event_tag: str = None
     var_type: type = None
-    renderable = True
+    renderable: bool = True
+
+
+def get_hierarchical_configuration(var: VarDefinition, ordered_configs: List[MutableMapping],
+                                   prefixes: Optional[List[str]] = None):
+    """
+    Read a configuration value. The value will be searched in the list of
+    dictionaries in order.
+    For each dictionary it searches the value with the key with the provided prefixes in order.
+    If not found with any prefix, it tries with the provided var_name.
+
+    If a value is obtained, it is returned converted to the expected type.
+
+    Dictionaries are normalized so name of key will not take into account casing, '_', ...
+
+    :param var:
+    :param prefixes:
+    :param ordered_configs:
+    :return:
+    """
+    var_name = var.var_name
+    type_ = var.var_type
+    default = var.default
+    if type_ is None and default is not None:
+        type_ = type(default)
+    if prefixes is None:
+        prefixes = []
+    for config in ordered_configs:
+        config = ConfigKeyDict(config)
+        for prefix in prefixes:
+            if prefix in config and isinstance(config.get(prefix), dict):
+                if var_name in config[prefix]:
+                    return config[prefix][var_name]
+            var = prefix + var_name
+            if var in config:
+                return safe_convert(config[var], type_=type_)
+        if var_name in config:
+            return safe_convert(config[var_name], type_=type_)
+    if default is not None:
+        return safe_convert(default, type_=type_)
+    return None
 
 
 class GlobalAttributes:
@@ -399,6 +447,56 @@ class GlobalAttributes:
     If this attribute is provided, attribute GlobalAttributes.AUTO_CLOSE_AT will be filled or replaced with the
     instant resulting of adding this value to the time when the alert was received.
     """
+
+    RECOVERY_ACTIONS = VarDefinition('recoveryActions', default=None, var_type=dict)
+    """
+    Recovery actions definition.
+    """
+
+
+class RecoveryActionsStatus(str, Enum):
+    InProgress = 'in_progress'
+    WaitingResolution = 'waiting'
+    Finished = 'finished'
+
+
+class RecoveryActionsFields:
+    __slots__ = ()
+    PROVIDER = VarDefinition('provider', default='awx')
+    ACTIONS = VarDefinition('actions', default=None, var_type=list)
+    ALERTERS = VarDefinition('alerters', default=None, var_type=list)
+    ALERTERS_ALWAYS = VarDefinition('alertersAlways', default=[], var_type=list)
+    EXTRA_CONFIG = VarDefinition('config', default={})
+    TASK_QUEUE = VarDefinition('taskQueue', default='recovery_actions')
+    STATUS_QUEUE = VarDefinition('statusQueue', default='recovery_actions')
+    MAX_RETRIES = VarDefinition('maxRetries', default=3)
+    TIMEOUT_FOR_RESPONSE = VarDefinition('timeoutForResponse', default=300.0)
+    STATUS_REQUEST_INTERVAL = VarDefinition('statusRequestInterval', default=30.0)
+    WAIT_QUEUE = VarDefinition('waitQueue', default='recovery_actions')
+    TIMEOUT_FOR_RESOLUTION = VarDefinition('timeoutForResolution', default=600.0)
+    ACTION_DELAY = VarDefinition('actionDelay', default=None)
+    JOB_RETRY_INTERVAL = VarDefinition('jobRetryInterval', default=5.0)
+    """
+    Base interval no retry a failed recovery actions job execution on a provider. The actual interval
+    will be a random value in the range (interval - interval/2, interval + interval/2)
+    """
+
+
+class RecoveryActionsDataFields:
+    __slots__ = ()
+    ATTRIBUTE = "recoveryActionsData"
+    FIELD_STATUS = 'status'
+    FIELD_RESPONSE = 'response'
+    FIELD_RECEIVED = 'received'
+    FIELD_START = 'start'
+    FIELD_END = 'end'
+    FIELD_ELAPSED = 'elapsed_time'
+    FIELD_SUCCESS = 'success'
+    FIELD_BG_TASK_ID = 'bgtask_id'
+    FIELD_RETRIES = 'retries'
+    FIELD_JOB_ID = 'job_id'
+    FIELD_RECOVERED_AT = 'recovered_at'
+    FIELD_ALERTING_AT = 'alerting_at'
 
 
 class ContextualConfiguration(object):
@@ -506,6 +604,21 @@ class ContextualConfiguration(object):
     If True, stores the exception traceback in the alerter result attribute
     """
 
+    REASON = VarDefinition('reason', {
+        "new": "New event",
+        "recovery": "Event recovered",
+        "repeat": "Event repetition received"
+    })
+    """
+    Default reason to include in the response.
+    """
+
+    ALERTACLIENT_CONFIGURATION = VarDefinition('alertaClientConfiguration', default={})
+    """
+    Configuration for connecting to Alerta Server using Alerta Client. 
+    To be used by autoclose background task.
+    """
+
     @staticmethod
     def get_contextual_global_config(var_definition: VarDefinition, alert,
                                      plugin, operation=None) -> Tuple[Any, ConfigurationContext]:
@@ -568,6 +681,21 @@ class ContextualConfiguration(object):
             renderable=var_definition.renderable)[0]
 
     @staticmethod
+    def get_global_configuration(var_definition: VarDefinition, global_config=None) -> Any:
+        """
+
+        :param var_definition:
+        :param global_config: Check for value in this config if not available as attribute
+        :return:
+        """
+        return ContextualConfiguration.get_contextual_config_generic(
+            var_name=var_definition.var_name, alert=None, alerter_name='',
+            operation=None, type_=var_definition.var_type, default=var_definition.default,
+            specific_event_tag=var_definition.specific_event_tag,
+            alerter_config=None, global_config=global_config,
+            renderable=var_definition.renderable)[0]
+
+    @staticmethod
     def get_event_tags(alert, operation=None):
         key_name = GlobalAttributes.EVENT_TAGS.var_name
         alert_attributes = ConfigKeyDict(alert.attributes)
@@ -581,7 +709,7 @@ class ContextualConfiguration(object):
         return ConfigKeyDict({**config_event_tags, **alert_event_tags})
 
     @staticmethod
-    def get_contextual_config_generic(var_name: str, alert, alerter_name: str, operation=None,
+    def get_contextual_config_generic(var_name: str, alert: Optional[Alert], alerter_name: str, operation: str = None,
                                       type_=None, default=None,
                                       specific_event_tag: str = None, alerter_config: dict = None,
                                       global_config: dict = None, renderable=True) -> Tuple[Any, ConfigurationContext]:
@@ -592,7 +720,7 @@ class ContextualConfiguration(object):
         :param var_name:
         :param alert:
         :param alerter_name:
-        :param str operation:
+        :param operation:
         :param alerter_config:
         :param global_config:
         :param type_:
@@ -613,28 +741,28 @@ class ContextualConfiguration(object):
         if is_dict is None:
             is_dict = type_ == dict if type_ is not None else None
 
-        alert_attributes = ConfigKeyDict(alert.attributes)
+        alert_attributes = ConfigKeyDict(alert.attributes) if alert else ConfigKeyDict()
         alerter_config = ConfigKeyDict(alerter_config)
 
         # From event tags attribute. if specific_event_tag is provided, check first.
         # First try with the prefix of the operation ('new' or 'recovery') if tag name doesn't start with that prefix.
         # For dict vars, only the first tag found is used. If both tags have data, data is not merged.
-        event_tags = ContextualConfiguration.get_event_tags(alert, operation)
-        tag_list = {t for t in (specific_event_tag, alerter_name+var_name, var_name) if t}
-        for t in tag_list:
-            from_tags = safe_convert(event_tags.get_for_operation(t, operation), type_, operation)
-            if from_tags is not None:
-                level = ConfigurationContext.AlertEventTag
-                if is_dict is None:
-                    is_dict = isinstance(from_tags, dict)
-                if not is_dict:
-                    if renderable:
-                        from_tags = render_value(from_tags, alert=alert, config=alerter_config,
-                                                 attributes=alert_attributes, event_tags=event_tags)
-                    return from_tags, level
-                break
-        else:
-            from_tags = None
+        event_tags = ContextualConfiguration.get_event_tags(alert, operation) if alert else None
+        from_tags = None
+        if event_tags:
+            tag_list = {t for t in (specific_event_tag, alerter_name+var_name, var_name) if t}
+            for t in tag_list:
+                from_tags = safe_convert(event_tags.get_for_operation(t, operation), type_, operation)
+                if from_tags is not None:
+                    level = ConfigurationContext.AlertEventTag
+                    if is_dict is None:
+                        is_dict = isinstance(from_tags, dict)
+                    if not is_dict:
+                        if renderable:
+                            from_tags = render_value(from_tags, alert=alert, config=alerter_config,
+                                                     attributes=alert_attributes, event_tags=event_tags)
+                        return from_tags, level
+                    break
 
         # From attributes
         if alerter_name:
@@ -675,13 +803,20 @@ class ContextualConfiguration(object):
                                                        attributes=alert_attributes, event_tags=event_tags)
                 return from_config_alerter, level
 
-        # From alerter global configuration: <ALERTER_NAME>_<VAR>
-        environ = ConfigKeyDict(os.environ)
+        # From alerter global configuration: <ALERTER_NAME>_<VAR> from env var or global config
+        # If is a dict, merge global config with env var (env var will have more priority)
         global_config = ConfigKeyDict(global_config)
         alerter_key = f"{alerter_name}{var_name}"
-        from_global_alerter = safe_convert(environ.get(alerter_key,
-                                                       global_config.get_for_operation(alerter_key, operation)),
-                                           type_, operation)
+        from_global_alerter_env = safe_convert(processed_environment.get(alerter_key), type_, operation)
+        if from_global_alerter_env is not None and is_dict is None:
+            is_dict = isinstance(from_global_alerter_env, dict)
+        from_global_alerter_gc = safe_convert(global_config.get_for_operation(alerter_key, operation), type_, operation)
+        if from_global_alerter_gc is not None and is_dict is None:
+            is_dict = isinstance(from_global_alerter_gc, dict)
+        if is_dict:
+            from_global_alerter = merge(from_global_alerter_gc or {}, from_global_alerter_env or {})
+        else:
+            from_global_alerter = from_global_alerter_gc if from_global_alerter_env is None else from_global_alerter_env
         if from_global_alerter is not None:
             if level is None:
                 level = ConfigurationContext.AlerterGlobalConfig
@@ -694,10 +829,18 @@ class ContextualConfiguration(object):
                 return from_global_alerter, level
 
         # From default alerters configuration as env var o in global config: ALERTERS_DEFAULT_<VAR>
+        # If is a dict, merge global config with env var (env var will have more priority)
         default_key = f"{ALERTER_DEFAULT_CONFIG_VALUE_PREFIX}{var_name}"
-        from_config_default = safe_convert(environ.get(default_key,
-                                                       global_config.get_for_operation(default_key, operation)),
-                                           type_, operation)
+        from_config_default_env = safe_convert(processed_environment.get(default_key), type_, operation)
+        if from_config_default_env is not None and is_dict is None:
+            is_dict = isinstance(from_config_default_env, dict)
+        from_config_default_gc = safe_convert(global_config.get_for_operation(default_key, operation), type_, operation)
+        if from_config_default_gc is not None and is_dict is None:
+            is_dict = isinstance(from_config_default_gc, dict)
+        if is_dict:
+            from_config_default = merge(from_config_default_gc or {}, from_config_default_env or {})
+        else:
+            from_config_default = from_config_default_gc if from_config_default_env is None else from_config_default_env
         if from_config_default is not None:
             if level is None:
                 level = ConfigurationContext.GlobalConfig
@@ -736,7 +879,38 @@ class ContextualConfiguration(object):
             return default, level
 
 
+def preprocess_environment():
+    processed_env = ConfigKeyDict()
+    for k, v in os.environ.items():
+        parent, _, child = k.partition('__')
+        if parent and child:
+            parsed_value = None
+            if len(v) == len(v.replace('.', '')) + 1:
+                try:
+                    parsed_value = float(v)
+                except ValueError:
+                    pass
+            if parsed_value is None:
+                try:
+                    parsed_value = int(v)
+                except ValueError:
+                    pass
+            if parsed_value is None:
+                if v.lower() == 'true':
+                    parsed_value = True
+                elif v.lower() == 'false':
+                    parsed_value = False
+            if parsed_value is None:
+                parsed_value = v
+            processed_env.setdefault(parent, {})[child.lower()] = parsed_value
+        else:
+            processed_env[k] = v
+    return processed_env
+
+
 def init_configuration(config):
+    global processed_environment
+    processed_environment = preprocess_environment()
     overridable_keys = (
         'ALERTERS_TASK_BY_OPERATION',
         'ALERTERS_TEMPLATES_LOCATION'

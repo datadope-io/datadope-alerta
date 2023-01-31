@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from iometrics_alerta import CONFIG_AUTO_CLOSE_TASK_INTERVAL, \
-    ConfigKeyDict, DEFAULT_AUTO_CLOSE_TASK_INTERVAL
+    ConfigKeyDict, DEFAULT_AUTO_CLOSE_TASK_INTERVAL, ContextualConfiguration
 
 from . import app, celery, db, getLogger, Alert, Status, AlertaClient
 
@@ -19,13 +19,21 @@ def setup_periodic_tasks(sender, **kwargs):
 
 
 class ClientTask(celery.Task):
-    alerta_client_config = app.config.get('ALERTACLIENT_CONFIGURATION')
-    alerta_client = AlertaClient(**alerta_client_config)
+
+    __alerta_client = None
+
+    @property
+    def alerta_client(self):
+        if self.__alerta_client is None:
+            alerta_client_config = ContextualConfiguration.get_global_configuration(
+                ContextualConfiguration.ALERTACLIENT_CONFIGURATION, global_config=app.config)
+            self.__alerta_client = AlertaClient(**alerta_client_config)
+        return self.__alerta_client
 
 
 @celery.task(base=ClientTask, bind=True, ignore_result=True, queue=app.config.get('AUTO_CLOSE_TASK_QUEUE'))
 def check_automatic_closing(self):
-    logger.info('Automatic closing task launched')
+    logger.debug('Automatic closing task launched')
     try:
         to_close_ids = db.get_must_close_ids(limit=100)
         if to_close_ids:

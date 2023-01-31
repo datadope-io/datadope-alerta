@@ -60,9 +60,14 @@ setup(
     entry_points={
         'alerta.plugins': [
             'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
+            'recovery_actions = iometrics_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
             'email = iometrics_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = iometrics_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'test = iometrics_alerta.plugins.test.test_plugin:TestPlugin',
+        ],
+        'alerta.recovery_actions.providers': [
+            'awx = iometrics_alerta.plugins.recovery_actions.providers.awx:Provider',
+            'test = iometrics_alerta.plugins.recovery_actions.providers.test:TestProvider'
         ]
     }
 )

@@ -32,5 +32,7 @@ def revoke_task(task_id):
 # Import all tasks to ensure celery finds them including only the package in CELERTY_IMPORTS
 from .auto_close import check_automatic_closing  # noqa - To provide import for package modules
 
+from .recovery_actions import launch_actions  # noqa - To provide import for package modules
+
 # Tasks defined as classes must be instantiated and registered
 from .alert import event_task, recovery_task, repeat_task # noqa - To provide import for package modules
