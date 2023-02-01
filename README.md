@@ -32,7 +32,7 @@ This behavior may be configured by alert using alert attribute `deduplicationTyp
 that don't provide this attribute is defined in configuration property `DEFAULT_DEDUPLICATION_TYPE` (default: 'both'). 
 Possible values for the attribute or configuration are: 
 * `both`: original + new deduplication by attribute will be executed.
-* `attribute`: only new dediplication by attribute will be executed.
+* `attribute`: only new deduplication by attribute will be executed.
 
 For `attribute` deduplication type, alerts with same environment, resource, event and severity will not be deduplicated
 if attribute `deduplication` has a different value (or not provided).
@@ -45,7 +45,7 @@ considered as duplicated and a new alert is created.
 
 Housekeeping in modified too, separating housekeeping of expired and closed alerts. Now the time to delete these
 two kind of alerts is configured using different configuration properties:
-* `DELETE_EXPIRED_AFTER`: alerta property now configures the time (in secodns) to delete expired alerts.
+* `DELETE_EXPIRED_AFTER`: alerta property now configures the time (in seconds) to delete expired alerts.
 Default value is 7200. A value of 0 may be used to not deleting expired alerts.
 * `DELETE_CLOSED_ALGETE`: new property to configure the time (in seconds) to delete closed alerts. If not configured,
 the value of `DELETE_EXPIRED_AFTER` is used. Use a value of 0 to not deleting closed alerts.
@@ -291,7 +291,7 @@ With this library installed, a server can be launched within the alert/celery pi
 celery -A "iometrics_alerta.plugins.bgtasks.celery" flower
 ```
 
-Without parameters, the server will listent in port 5555. Use argument `--port` to change the port.
+Without parameters, the server will listen in port 5555. Use argument `--port` to change the port.
 
 See [Flower documentation](https://flower.readthedocs.io/en/latest/index.html) for more information.
 
@@ -339,6 +339,81 @@ alerta send -r web01 -e NodeDown -E Production -S Website -s major -t "Web serve
 
 This `alerta` command supports a full bunch of arguments to customize the alert to be sent to the server. 
 See [alerta client documentation](https://github.com/alerta/python-alerta-client).
+
+### Installation using docker-compose
+
+A full working environment can be launched running [docker-compose.yml](deployment/docker-compose.yml) file 
+provided in [deployment](deployment) folder.
+
+To use this docker-compose file an environment file with name `.env` must be generated in the same deployment folder.
+An example file [example.env](deployment/example.env) is provided. It can be copied as `.env` and modified to
+use specific secrets.
+
+Once `.env` file si available, docker-compose can be executed from [deployment](deployment) folder using:
+
+```shell
+docker-compose up -d
+```
+
+This command will create the following containers:
+* iometrics-alerta-postgres
+* iometrics-alerta-redis
+* iometrics-alerta-server (listening in port 8001 of host computer, port 8000 in container)
+* iometrics-alerta-webui (listening in port 8000 of host computer and in container)
+* iometrics-alerta-celery-worker-1
+* iometrics-alerta-celery-beat (schedules periodic background tasks)
+* iometrics-alerta-celery-flower (UI to manage celery tasks listening in port 5555 of host computer and in container)
+
+The number of celery workers to run may be modified using:
+
+```shell
+docker-compose up -d --scale celery-worker=2
+```
+
+In this case, 2 celery workers will run.
+
+Default configuration for alerta and celery environments is obtained from [config_example/alertad.conf](config_example/alertad.conf).
+Most of the configuration may be overriden using environment vars in [deployment/.env](deployment/.env) file.
+
+### Installation using dockers
+
+#### Image generation
+
+Three docker files are provided to create images for: 
+* alerta server: Dockerfile.alerta
+* celery workers, beat and flower services: Dockerfile.celery
+* alerta webui: Dockerfile.webui
+
+Dockerfiles and needed files to build dockers are available in [deployment](deployment) folder.
+
+To create the images:
+
+```shell
+docker build -f deployment/alerta.dockerfile -t iometrics-alerta-server .
+docker build -f deployment/celert.dockerfile -t iometrics-alerta-celery .
+docker build -f deployment/webui.dockerfile -t iometrics-alerta-webui .
+```
+
+These commands must be executed from repository root folder.
+
+Alerta and celery dockers will include [config files in config_example](config_example) 
+but environment vars should be provided when running dockers to provide the actual 
+configuration for the installation environment. These env vars can be provided with
+`-e` and/or `--env-file` docker run arguments.
+
+To run a full environment:
+
+```shell
+docker run -d --rm --name iometrics-alerta-server --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" -p 8001:8000 iometrics-alerta-server
+docker run -d --rm --name iometrics-alerta-celery-worker1 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery
+docker run -d --rm --name iometrics-alerta-celery-worker2 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery
+docker run -d --rm --name iometrics-alerta-celery-beat --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery entry_point_celery_beat.sh
+docker run -d --rm --name iometrics-alerta-celery-flower --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" -p 5555:5555 iometrics-alerta-celery entry_point_celery_flower.sh
+docker run -d --rm --name iometrics-alerta-webui -p 8000:8000 iometrics-alerta-webui
+```
+
+These configuration expects to have a running postgres and redis. The connection with them
+is done using env vars `DATABASE_URL` and `CELERY_BROKER_URL`.
 
 # Development of alerters
 

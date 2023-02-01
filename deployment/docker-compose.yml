@@ -1,0 +1,153 @@
+# Needs a .env file.
+# A file example.env is provided. MAke a copy as '.env' and modify the values as needed.
+version: "2.4"
+
+name: iometrics-alerta
+
+volumes:
+  alerta_postgres:
+
+networks:
+  alerta:
+    name: alerta_net
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: iometrics-alerta-postgres
+    networks:
+      alerta:
+        aliases:
+          - db.alerta.me
+    volumes:
+      - alerta_postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    env_file: .env
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_DB: "${POSTGRES_DB:-monitoring}"
+    restart: unless-stopped
+    mem_limit: 4000m
+    mem_reservation: 1000m
+    # command: postgres -c "log_statement=all"
+
+  redis:
+    image: redis
+    container_name: iometrics-alerta-redis
+    networks:
+      alerta:
+        aliases:
+          - redis.alerta.me
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  server:
+    image: iometrics-alerta/alerta-server
+    build:
+      context: ..
+      dockerfile: deployment/alerta.dockerfile
+    container_name: iometrics-alerta-server
+    networks:
+      alerta:
+        aliases:
+          - server.alerta.me
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8001:8000"
+    env_file: .env
+    environment:
+      PGUSER: "${POSTGRES_USER:-postgres}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
+      CELERY_BROKER_URL: redis://redis:6379/0
+
+
+  webui:
+    image: iometrics-alerta/alerta-webui
+    build:
+      context: ..
+      dockerfile: deployment/webui.dockerfile
+    container_name: iometrics-alerta-webui
+    networks:
+      alerta:
+    depends_on:
+      - server
+    ports:
+      - "8000:8000"
+    environment:
+      ALERTA_WEBUI_PORT: 8000
+      ALERTA_SERVER_ENDPOINT: http://server:8000
+
+  celery-worker:
+    image: iometrics-alerta/celery-worker
+    build:
+      context: ..
+      dockerfile: deployment/celery.dockerfile
+    networks:
+      alerta:
+    depends_on:
+      - postgres
+      - redis
+      - server
+    env_file: .env
+    environment:
+      PGUSER: "${POSTGRES_USER:-postgres}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      ALERTACLIENT_CONFIGURATION__ENDPOINT: http://server:8000
+      ALERTACLIENT_CONFIGURATION__KEY: "${API_KEY}"
+      ALERTACLIENT_CONFIGURATION__SSL_VERIFY: "false"
+      ALERTACLIENT_CONFIGURATION__TIMEOUT: "20.0"
+
+  celery-beat:
+    image: iometrics-alerta/celery-worker
+    build:
+      context: ..
+      dockerfile: deployment/celery.dockerfile
+    container_name: iometrics-alerta-celery-beat
+    networks:
+      alerta:
+    depends_on:
+      - postgres
+      - redis
+      - server
+    command: entry_point_celery_beat.sh
+    env_file: .env
+    environment:
+      PGUSER: "${POSTGRES_USER:-postgres}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      ALERTACLIENT_CONFIGURATION__ENDPOINT: http://server:8000
+      ALERTACLIENT_CONFIGURATION__KEY: "${API_KEY}"
+
+  celery-flower:
+    image: iometrics-alerta/celery-worker
+    build:
+      context: ..
+      dockerfile: deployment/celery.dockerfile
+    container_name: iometrics-alerta-celery-flower
+    networks:
+      alerta:
+    depends_on:
+      - postgres
+      - redis
+      - server
+    command: entry_point_celery_flower.sh
+    ports:
+      - "5555:5555"
+    env_file: .env
+    environment:
+      PGUSER: "${POSTGRES_USER:-postgres}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      ALERTACLIENT_CONFIGURATION__ENDPOINT: http://server:8000
+      ALERTACLIENT_CONFIGURATION__KEY: "${API_KEY}"
+
