@@ -7,10 +7,13 @@ from typing import Any, Dict, Tuple, Optional, Union
 
 # noinspection PyPackageRequirements
 from celery.utils.log import get_task_logger
+# noinspection PyPackageRequirements
+from jinja2 import TemplateNotFound
 
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
-    ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime
+    ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime, \
+    alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
 
 
 def getLogger(name):  # noqa
@@ -100,12 +103,45 @@ class Alerter(ABC):
         return ContextualConfiguration.get_contextual_alerter_config(var_definition, alert=alert,
                                                                      alerter=self, operation=operation)
 
+    def get_alerter_data_for_alert(self, alert, operation: str) -> dict:
+        """
+        Helper method to return alerter specific data received as an alert attribute.
+
+        Alerter specif data atttrinute name is formed as <alerter_name><ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX>,
+        and is searched in alert attributes using normalized keys.
+        ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX is '_CONFIG' by default.
+        So for an alerter with name "email" the expected attribute name would be email_CONFIG.
+        Every normalized format of "email_CONFIG" would match the attribute.
+        The preferred format would be camelCase: "emailConfig".
+
+        Specific configuration for the operation may be provided so attributes: newEmailConfig, recoveryEmailConfig...
+        are also valid and the correct one for the provided operation will be returned
+        with priority against emailConfig.
+
+        Moreover, different values for different operations may be configured inside the principal emailConfig
+        attribute:
+        emailConfig = {"new": {...}, "recovery": {...}, "repeat": {...}}
+
+        :param alert:
+        :param operation:
+        :return:
+        """
+        data_key = self.name + ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
+        alert_attributes = ConfigKeyDict(alert.attributes)
+        alerter_data = alert_attributes.get_for_operation(data_key, operation, {})
+        return safe_convert(alerter_data, dict, operation, default={})
+
     @staticmethod
     def get_event_tags(alert, operation=None):
         """
         Helper method for alerters to get full eventTags dictionary (keys normalized)
         """
         return ContextualConfiguration.get_event_tags(alert, operation)
+
+    @staticmethod
+    def get_event_tag(tag, alert, type_=None, operation=None, default=None):
+        tags = Alerter.get_event_tags(alert, operation)
+        return safe_convert(tags.get(tag, default), type_=type_, operation=operation)
 
     def render_template(self, template_path, alert, operation=None):
         """
@@ -115,7 +151,11 @@ class Alerter(ABC):
           * alert: alert object
           * attributes: alert attributes dict (keys normalized)
           * event_tags: alert eventTags attribute  dict (keys normalized)
-          * config: alerter configuration dict (keys normalized)
+          * alerter_config: alerter configuration dict (keys normalized)
+          * alerter_name: alerter name
+          * operation: operation
+          * operation_key: attribute key for operation. See 'ATTRIBUTE_KEYS_BY_OPERATION'
+          * pretty_alert: alert serialization as pretty json
         :param template_path:
         :param alert:
         :param operation:
@@ -127,7 +167,41 @@ class Alerter(ABC):
                                alert=alert,
                                attributes=attributes,
                                event_tags=event_tags,
-                               config=self.config)
+                               alerter_config=self.config,
+                               alerter_name=self.name,
+                               operation=operation,
+                               operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
+                               pretty_alert=alert_pretty_json_string(alert))
+
+    def render_value(self, value, alert, operation=None):
+        """
+        Helper method for alerters to render a file formatted as Jinja2 template.
+
+        Template may use the variables:
+          * alert: alert object
+          * attributes: alert attributes dict (keys normalized)
+          * event_tags: alert eventTags attribute  dict (keys normalized)
+          * alerter_config: alerter configuration dict (keys normalized)
+          * alerter_name: alerter name
+          * operation: operation
+          * operation_key: attribute key for operation. See 'ATTRIBUTE_KEYS_BY_OPERATION'
+          * pretty_alert: alert serialization as pretty json
+        :param value:
+        :param alert:
+        :param operation:
+        :return:
+        """
+        attributes = ConfigKeyDict(alert.attributes)
+        event_tags = self.get_event_tags(alert, operation)
+        return render_value(value,
+                            alert=alert,
+                            attributes=attributes,
+                            event_tags=event_tags,
+                            alerter_config=self.config,
+                            alerter_name=self.name,
+                            operation=operation,
+                            operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
+                            pretty_alert=alert_pretty_json_string(alert))
 
     @abstractmethod
     def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
@@ -140,6 +214,25 @@ class Alerter(ABC):
     @abstractmethod
     def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         pass
+
+    def get_message(self, alert: Alert, operation: str) -> str:
+        message = None
+        template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
+        if template:
+            try:
+                message = self.render_template(template, alert=alert, operation=operation)
+            except TemplateNotFound:
+                logger.warning("Template %s not found for email Alerter. Using other options to create message",
+                               template)
+            except Exception as e:
+                logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
+        if message is None:
+            message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
+        return message
+
+    def is_dry_run(self, alert: Alert, operation: str) -> bool:
+        dry_run, _ = self.get_contextual_configuration(ContextualConfiguration.DRY_RUN, alert, operation)
+        return dry_run
 
 
 ATTRIBUTE_KEYS_BY_OPERATION = {

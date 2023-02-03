@@ -11,7 +11,7 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, merge, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
+from iometrics_alerta import DateTime, merge, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config
 from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
@@ -38,6 +38,10 @@ class IOMAlerterPlugin(PluginBase, ABC):
         self.__alerter_name = None
         self.__alerter_config = None
         self.__alerter_attribute_name = None
+
+    # noinspection PyShadowingBuiltins
+    def get_config(self, key, default=None, type=None, config=None):
+        return get_config(key, default, type, self.global_app_config if config is None else config)
 
     @abstractmethod
     def get_alerter_class(self) -> Type[Alerter]:
@@ -378,7 +382,7 @@ class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
         alerter_class = self.alerter_data[BGTadC.CLASS]
         response = {}
         try:
-            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG])
+            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG], self.alerter_config)
             response = getattr(alerter, operation)(alert, reason)
         except Exception as exc:
             store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,

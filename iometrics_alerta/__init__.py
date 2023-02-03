@@ -1,11 +1,12 @@
+import builtins
 import json
 import logging
 import os
 from collections.abc import MutableMapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
-from typing import Any, Tuple, Optional, List
+from typing import Any, Tuple, Optional, List, Dict
 
 from dateutil import parser
 # noinspection PyPackageRequirements
@@ -74,6 +75,21 @@ May be overriden by configuration.
 
 
 processed_environment: Optional['ConfigKeyDict'] = None
+
+
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, (datetime, date)):
+        return DateTime.iso8601_utc(obj)
+    raise TypeError("Type %s not serializable" % type(obj))
+
+
+def dumps_with_dates(dict_, **kwargs):
+    return json.dumps(dict_, default=json_serial, **kwargs)
+
+
+def alert_pretty_json_string(alert: Alert):
+    return dumps_with_dates({x: y for x, y in alert.serialize.items() if y is not None}, indent=4)
 
 
 def get_task_name(operation):
@@ -255,9 +271,9 @@ def to_camel_case(snake_str):
     return components[0].lower() + ''.join(x.title() for x in components[1:])
 
 
-def safe_convert(value, type_, operation=None) -> Any:
+def safe_convert(value, type_, operation=None, default=None) -> Any:
     if value is None:
-        return value
+        return default
     key = None
     if operation:
         key = get_task_name(operation)
@@ -271,12 +287,12 @@ def safe_convert(value, type_, operation=None) -> Any:
         if key in value:
             value = value[key]
         elif type_ and type_ != dict:
-            return None
+            return default
         else:
             found = [x for x in ALERTERS_TASK_BY_OPERATION.values() if x in value]
             if found:
                 # Found the other operation
-                return None
+                return default
     if type_ is not None and not isinstance(value, type_):
         try:
             if type_ in (dict, list):
@@ -289,9 +305,27 @@ def safe_convert(value, type_, operation=None) -> Any:
             if type_ == list:
                 return [x.strip() for x in str(value).split(',')]
             logger.warning("Cannot convert '%s' to '%s'", str(value), type_.__name__)
-            return None
+            return default
 
     return value
+
+
+# noinspection PyShadowingBuiltins
+def get_config(key, default=None, type=None, config=None):
+    if key in processed_environment:
+        rv = processed_environment[key]
+    else:
+        if config is None:
+            config = flask.current_app.config
+        try:
+            rv = config.get(key, default)
+        except KeyError:
+            rv = default
+    if default is not None and type is None:
+        type = builtins.type(default)
+    if rv is not None and type is not None:
+        rv = safe_convert(rv, type)
+    return rv
 
 
 class ConfigKeyDict(MutableMapping):
@@ -305,6 +339,10 @@ class ConfigKeyDict(MutableMapping):
     def __init__(self, *args, **kwargs):
         self.store = dict()
         self.keys_store = dict()
+        if not args or (isinstance(args, tuple) and args[0] is None):
+            args = []
+        if kwargs is None:
+            kwargs = {}
         self.update(dict(*args, **kwargs))  # use the free update to set keys
 
     def __getitem__(self, key):
@@ -356,6 +394,12 @@ class ConfigKeyDict(MutableMapping):
 
     def normalized(self) -> dict:
         return self.store
+
+    def original_dict(self) -> Dict[str, Any]:
+        result = {}
+        for k, v in self.store.items():
+            result[self.original_key(k)] = v
+        return result
 
 
 class ConfigurationContext(str, Enum):
@@ -474,7 +518,7 @@ class RecoveryActionsFields:
     STATUS_REQUEST_INTERVAL = VarDefinition('statusRequestInterval', default=30.0)
     WAIT_QUEUE = VarDefinition('waitQueue', default='recovery_actions')
     TIMEOUT_FOR_RESOLUTION = VarDefinition('timeoutForResolution', default=600.0)
-    ACTION_DELAY = VarDefinition('actionDelay', default=None)
+    ACTION_DELAY = VarDefinition('actionDelay', default=None, var_type=float)
     JOB_RETRY_INTERVAL = VarDefinition('jobRetryInterval', default=5.0)
     """
     Base interval no retry a failed recovery actions job execution on a provider. The actual interval
@@ -604,6 +648,25 @@ class ContextualConfiguration(object):
     If True, stores the exception traceback in the alerter result attribute
     """
 
+    TEMPLATE_PATH = VarDefinition("template", default="{{ alerter_name }}/{{ operation_key }}.j2")
+    """
+    Relative path to a Jinja2 template file to generate alerte message.
+    
+    The path is relative to the path configured in 'ALERTERS_TEMPLATES_LOCATION' variable (../templates as default)
+    """
+
+    MESSAGE = VarDefinition('message', default={
+        "new": "NEW PROBLEM {{ alert.event }} in resource {{ alert.resource }} with severity {{ alert.severity }}"
+               "\n{{ pretty_alert|safe }}",
+        "recovery": "PROBLEM {{ alert.event }} RECOVERED in resource {{ alert.resource }}"
+                    "\n{{ pretty_alert|safe }}",
+        "repeat": "PROBLEM {{ alert.event }} REPEATED in resource {{ alert.resource }}"
+                  "\n{{ pretty_alert|safe }}"
+    })
+    """
+    Default message to send to alerters.
+    """
+
     REASON = VarDefinition('reason', {
         "new": "New event",
         "recovery": "Event recovered",
@@ -618,6 +681,8 @@ class ContextualConfiguration(object):
     Configuration for connecting to Alerta Server using Alerta Client. 
     To be used by autoclose background task.
     """
+
+    DRY_RUN = VarDefinition('dryRun', default=False)
 
     @staticmethod
     def get_contextual_global_config(var_definition: VarDefinition, alert,
@@ -743,6 +808,8 @@ class ContextualConfiguration(object):
 
         alert_attributes = ConfigKeyDict(alert.attributes) if alert else ConfigKeyDict()
         alerter_config = ConfigKeyDict(alerter_config)
+        operation_key = ALERTERS_TASK_BY_OPERATION[operation] if operation else None
+        pretty_alert = alert_pretty_json_string(alert)
 
         # From event tags attribute. if specific_event_tag is provided, check first.
         # First try with the prefix of the operation ('new' or 'recovery') if tag name doesn't start with that prefix.
@@ -759,8 +826,10 @@ class ContextualConfiguration(object):
                         is_dict = isinstance(from_tags, dict)
                     if not is_dict:
                         if renderable:
-                            from_tags = render_value(from_tags, alert=alert, config=alerter_config,
-                                                     attributes=alert_attributes, event_tags=event_tags)
+                            from_tags = render_value(from_tags, alert=alert, alerter_config=alerter_config,
+                                                     attributes=alert_attributes, event_tags=event_tags,
+                                                     alerter_name=alerter_name, operation=operation,
+                                                     operation_key=operation_key, pretty_alert=pretty_alert)
                         return from_tags, level
                     break
 
@@ -786,8 +855,10 @@ class ContextualConfiguration(object):
                 is_dict = isinstance(from_attr, dict)
             if not is_dict:
                 if renderable:
-                    from_attr = render_value(from_attr, alert=alert, config=alerter_config,
-                                             attributes=alert_attributes, event_tags=event_tags)
+                    from_attr = render_value(from_attr, alert=alert, alerter_config=alerter_config,
+                                             attributes=alert_attributes, event_tags=event_tags,
+                                             alerter_name=alerter_name, operation=operation,
+                                             operation_key=operation_key, pretty_alert=pretty_alert)
                 return from_attr, level
 
         # From alerter specific configuration as env var o in global config: <ALERTER_NAME>_CONFIG[<var>]
@@ -799,8 +870,10 @@ class ContextualConfiguration(object):
                 is_dict = isinstance(from_config_alerter, dict)
             if not is_dict:
                 if renderable:
-                    from_config_alerter = render_value(from_config_alerter, alert=alert, config=alerter_config,
-                                                       attributes=alert_attributes, event_tags=event_tags)
+                    from_config_alerter = render_value(from_config_alerter, alert=alert, alerter_config=alerter_config,
+                                                       attributes=alert_attributes, event_tags=event_tags,
+                                                       alerter_name=alerter_name, operation=operation,
+                                                       operation_key=operation_key, pretty_alert=pretty_alert)
                 return from_config_alerter, level
 
         # From alerter global configuration: <ALERTER_NAME>_<VAR> from env var or global config
@@ -824,8 +897,10 @@ class ContextualConfiguration(object):
                 is_dict = isinstance(from_global_alerter, dict)
             if not is_dict:
                 if renderable:
-                    from_global_alerter = render_value(from_global_alerter, alert=alert, config=alerter_config,
-                                                       attributes=alert_attributes, event_tags=event_tags)
+                    from_global_alerter = render_value(from_global_alerter, alert=alert, alerter_config=alerter_config,
+                                                       attributes=alert_attributes, event_tags=event_tags,
+                                                       alerter_name=alerter_name, operation=operation,
+                                                       operation_key=operation_key, pretty_alert=pretty_alert)
                 return from_global_alerter, level
 
         # From default alerters configuration as env var o in global config: ALERTERS_DEFAULT_<VAR>
@@ -848,8 +923,10 @@ class ContextualConfiguration(object):
                 is_dict = isinstance(from_config_default, dict)
             if not is_dict:
                 if renderable:
-                    from_config_default = render_value(from_config_default, alert=alert, config=alerter_config,
-                                                       attributes=alert_attributes, event_tags=event_tags)
+                    from_config_default = render_value(from_config_default, alert=alert, alerter_config=alerter_config,
+                                                       attributes=alert_attributes, event_tags=event_tags,
+                                                       alerter_name=alerter_name, operation=operation,
+                                                       operation_key=operation_key, pretty_alert=pretty_alert)
                 return from_config_default, level
 
         if level is None:
@@ -869,13 +946,17 @@ class ContextualConfiguration(object):
                                        merge(prio3,
                                              merge(prio4, prio5)))))
             if renderable:
-                result = render_value(result, alert=alert, config=alerter_config,
-                                      attributes=alert_attributes, event_tags=event_tags)
+                result = render_value(result, alert=alert, alerter_config=alerter_config,
+                                      attributes=alert_attributes, event_tags=event_tags,
+                                      alerter_name=alerter_name, operation=operation,
+                                      operation_key=operation_key, pretty_alert=pretty_alert)
             return result, level
         else:
             if default and renderable:
-                default = render_value(default, alert=alert, config=alerter_config,
-                                       attributes=alert_attributes, event_tags=event_tags)
+                default = render_value(default, alert=alert, alerter_config=alerter_config,
+                                       attributes=alert_attributes, event_tags=event_tags,
+                                       alerter_name=alerter_name, operation=operation,
+                                       operation_key=operation_key, pretty_alert=pretty_alert)
             return default, level
 
 

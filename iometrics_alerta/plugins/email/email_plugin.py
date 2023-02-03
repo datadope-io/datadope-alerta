@@ -1,13 +1,13 @@
+import json
+import re
 from typing import Any, Dict, Tuple, Optional
-
-# noinspection PyPackageRequirements
-from jinja2 import TemplateNotFound
 
 from alerta.models.alert import Alert
 from iometrics_alerta.plugins import getLogger, VarDefinition
 from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
 from .emailer import send_email, simple_email_address_validation
+from ... import ConfigKeyDict
 
 CONFIG_KEY_SERVER = 'server'
 CONFIG_KEY_SERVER_HOST = 'host'
@@ -23,9 +23,7 @@ CONFIG_DEFAULT_SERVER_PORT = 25
 
 DATA_EMAIL_SENDER = 'sender'
 DATA_EMAIL_SUBJECT = 'subject'
-DATA_EMAIL_TEMPLATE = 'template'
 DATA_EMAIL_CONTENT_TYPE = 'contentType'
-DATA_EMAIL_MESSAGE = 'message'
 
 TAG_EMAILS_PREFIX = "EMAILS"
 DATA_EMAIL_RECIPIENTS = 'recipients'
@@ -45,6 +43,13 @@ logger = getLogger(__name__)
 
 
 class EMailAlerter(Alerter):
+
+    def __init__(self, name, config, bgtask=None):
+        super().__init__(name, config, bgtask)
+        for k, v in self.config.items():
+            if ConfigKeyDict.key_transform(k) in ('server', 'tasksdefinition') \
+                    and isinstance(v, str):
+                self.config[k] = json.loads(v)
 
     @staticmethod
     def _email_get_addresses_from_list(addresses) -> set:
@@ -71,7 +76,7 @@ class EMailAlerter(Alerter):
         else:
             return event_tags.get(tag) or ''
 
-    def _process_request(self, operation, alert, reason) -> Tuple[bool, Dict[str, Any]]:
+    def _process_request(self, operation, alert, reason: str) -> Tuple[bool, Dict[str, Any]]:  # noqa
         sender, _ = self.get_contextual_configuration(VarDefinition(DATA_EMAIL_SENDER, var_type=str),
                                                       alert,
                                                       operation=operation)
@@ -80,27 +85,7 @@ class EMailAlerter(Alerter):
                                                        operation=operation)
         event_tags = self.get_event_tags(alert, operation)
 
-        full_message = None
-        template, _ = self.get_contextual_configuration(VarDefinition(DATA_EMAIL_TEMPLATE), alert, operation)
-        if template:
-            try:
-                full_message = self.render_template(template, alert=alert, operation=operation)
-            except TemplateNotFound:
-                logger.warning("Template %s not found for email Alerter. Using other options to create message",
-                               template)
-            except Exception as e:
-                logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
-        if not full_message:
-            full_message, _ = self.get_contextual_configuration(
-                VarDefinition(DATA_EMAIL_MESSAGE, default=''), alert, operation=operation)
-            if not full_message:
-                if operation == Alerter.process_recovery.__name__:
-                    full_message = reason
-                    if not full_message:
-                        full_message = alert.text
-                else:
-                    text = alert.text or ''
-                    full_message = text.strip()
+        full_message = self.get_message(alert, operation)
         content_type, _ = self.get_contextual_configuration(VarDefinition(DATA_EMAIL_CONTENT_TYPE),
                                                             alert, operation)
 
@@ -119,7 +104,7 @@ class EMailAlerter(Alerter):
             files = []
 
         if not to:
-            logger.warning("NO ADDRESSES TO SEND EMAIL TO")
+            logger.warning("[EMAIL]NO ADDRESSES TO SEND EMAIL TO")
             return False, self.failure_response(reason=ERROR_REASON_NO_RECIPIENTS,
                                                 message=f"No destination email addresses has been received")
         server_config = self.config[CONFIG_KEY_SERVER]
@@ -131,24 +116,38 @@ class EMailAlerter(Alerter):
         key_file = server_config.get(CONFIG_KEY_SERVER_KEY_FILE)
         cert_file = server_config.get(CONFIG_KEY_SERVER_CERT_FILE)
         local_hostname = server_config.get(CONFIG_KEY_SERVER_LOCAL_HOSTNAME)
-        if subject:
-            body = full_message
-        else:
-            logger.warning("Tag %s not found. Using first message line as subject", DATA_EMAIL_SUBJECT)
-            subject, _, body = full_message.strip().partition('\n')
-        if not body:
-            body = subject
-        logger.info("SENDING EMAIL USING SERVER `%s:%d' WITH SUBJECT: '%s'", host, port, subject)
+        body = full_message
+        if not subject:
+            logger.warning("Tag %s not found. Getting subject from message", DATA_EMAIL_SUBJECT)
+            regex = r"<title>(.*)<\/title>"
+            match = re.findall(regex, full_message, re.MULTILINE | re.IGNORECASE)
+            if match:
+                subject = match[0]
+            else:
+                subject = full_message.strip().split('\n')[0]
+        logger.info("[EMAIL]SENDING EMAIL USING SERVER `%s:%d' WITH SUBJECT: '%s' TO %d EMAIL ADDRESSES",
+                    host, port, subject, len(to))
+        if not content_type:
+            if '<!doctype html>' in full_message.lower() \
+                    or '</html>' in full_message.lower() \
+                    or '</body>' in full_message.lower():
+                content_type = 'text/html'
+            else:
+                content_type = 'text/plain'
+        dry_run = self.is_dry_run(alert, operation)
+        if dry_run:
+            logger.debug("[EMAIL]BODY: %s", body)
+            return True, {RETURN_KEY_EMAILS: "0/0", "DRY-RUN": True}
         response = send_email(smtp_server=host, smtp_port=port,
                               smtp_login_user=user, smtp_login_password=password,
                               from_=sender, to=to, subject=subject, body=body, body_content_type=content_type,
                               files=files, tls_mode=tls_mode, cert_file=cert_file, key_file=key_file,
                               local_hostname=local_hostname)
         if response:
-            logger.warning("EMAILS SENT PARTIALLY: %d OF %d EMAIL ADDRESSES WERE WRONG", len(response), len(to))
+            logger.warning("[EMAIL]EMAILS SENT PARTIALLY: %d OF %d EMAIL ADDRESSES WERE WRONG", len(response), len(to))
             sent = len(to) - len(response)
         else:
-            logger.info("EMAILS SENT SUCCESSFULLY TO %d EMAIL ADDRESSES", len(to))
+            logger.info("[EMAIL]EMAILS SENT SUCCESSFULLY TO %d EMAIL ADDRESSES", len(to))
             sent = len(to)
         return True, {RETURN_KEY_EMAILS: f"{sent}/{len(to)}"}
 
@@ -158,7 +157,7 @@ class EMailAlerter(Alerter):
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         event_tags = self.get_event_tags(alert, operation='recovery')
         if TAG_EMAILS_NO_RECOVERY in event_tags:
-            logger.info("IGNORING RECOVERY ACTION. SHOULD USE 'IGNORE_RECOVERY' INSTEAD OF %s. Exiting",
+            logger.info("[EMAIL]IGNORING RECOVERY ACTION. SHOULD USE 'IGNORE_RECOVERY' INSTEAD OF %s. Exiting",
                         TAG_EMAILS_NO_RECOVERY)
             return False, self.failure_response(reason=ERROR_REASON_IGNORE_RECOVERY,
                                                 message=f"Received event tag {TAG_EMAILS_NO_RECOVERY}")
@@ -175,17 +174,6 @@ class EMailPlugin(IOMAlerterPlugin):
 
     def get_alerter_default_configuration(self) -> dict:
         return {
-            # "action_delay": 30,  # Use default
-            # "tasks_definition": {
-            #     "new": {
-            #         "queue": "email",
-            #         "priority": 5
-            #     },
-            #     "recovery": {
-            #         "queue": "email_recovery",
-            #         "priority": 6
-            #     }
-            # },
             "server": {
                 "host": "smtpserver",
                 "port": 25,
@@ -198,12 +186,8 @@ class EMailPlugin(IOMAlerterPlugin):
             },
             "sender": "alerta@datadope.io",
             "subject": {
-                "new": "NEW PROBLEM in {{ alert.resource }}",
-                "recovery": "RECOVERY: problem in {{ alert.resource }} is been resolved"
-            },
-            "template": {
-                "new": "email/new_event.html",
-                "recovery": "email/recovery.html"
-            },
-            "content_type": "text/html"
+                "new": "NEW PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}",
+                "recovery": "RECOVERY FOR PROBLEM {{ alert.event }} in {{ alert.resource }}",
+                "repeat": "REPEATING PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}"
+            }
         }

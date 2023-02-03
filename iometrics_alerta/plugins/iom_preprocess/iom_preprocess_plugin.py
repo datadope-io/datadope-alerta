@@ -32,7 +32,7 @@ class IOMAPreprocessPlugin(PluginBase):
         alerters = CConfig.get_global_attribute_value(GAttr.ALERTERS, alert, global_config=config)
         if alerters is not None:
             original_key = alert_attributes.original_key(alerters_key)
-            if original_key != alerters_key:
+            if original_key and original_key != alerters_key:
                 alert.attributes.pop(original_key)
             alert.attributes[alerters_key] = alerters
             alert_attributes[alerters_key] = alerters
