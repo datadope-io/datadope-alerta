@@ -1,8 +1,10 @@
+import json
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from importlib import import_module
+from json import JSONDecodeError
 from typing import Any, Dict, Tuple, Optional, Union
 
 # noinspection PyPackageRequirements
@@ -13,7 +15,7 @@ from jinja2 import TemplateNotFound
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime, \
-    alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
+    alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge
 
 
 def getLogger(name):  # noqa
@@ -53,10 +55,49 @@ class AlerterStatus(str, Enum):
 
 class Alerter(ABC):
 
-    def __init__(self, name, config, bgtask=None):
+    _alerter_config = None
+
+    def __init__(self, name, bgtask=None):
         self.name = name
-        self.config = ConfigKeyDict(config)
         self.bgtask = bgtask
+        self.config = ConfigKeyDict(self.get_alerter_config(self.name))
+
+    @classmethod
+    @abstractmethod
+    def get_default_configuration(cls) -> dict:
+        """
+        Provides alerter default configuration overridable with an environment value.
+
+        :return:
+        """
+        pass
+
+    @classmethod
+    def get_alerter_config(cls, alerter_name) -> Dict[str, Any]:
+        """
+        Reads alerter config using global app configuration. First get default configuration
+        from alerter and merges it with configuration from environment or config file.
+
+        Configuration key retrieved will be form as'<ALERTER_NAME>_CONFIG'
+        (using uppercase form of alerter_name property).
+
+        Override to implement a different mechanism to get the config for the alerter.
+
+        :return: alerter configuration
+        """
+        if cls._alerter_config is None:
+            default = cls.get_default_configuration() or {}
+            config_key = f"{alerter_name.upper()}{ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX}"
+            config = get_config(config_key, default={})
+            if isinstance(config, str):
+                try:
+                    config = json.loads(config)
+                except JSONDecodeError:
+                    logger.error("Wrong configuration for alerter '%s': '%s'",
+                                 alerter_name, config)
+                    config = {}
+            cls._alerter_config = merge(default, config)
+        return cls._alerter_config
 
     @staticmethod
     def get_fullname(klass):
@@ -222,8 +263,8 @@ class Alerter(ABC):
             try:
                 message = self.render_template(template, alert=alert, operation=operation)
             except TemplateNotFound:
-                logger.warning("Template %s not found for email Alerter. Using other options to create message",
-                               template)
+                logger.info("Template %s not found for email Alerter. Using other options to create message",
+                            template)
             except Exception as e:
                 logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
         if message is None:

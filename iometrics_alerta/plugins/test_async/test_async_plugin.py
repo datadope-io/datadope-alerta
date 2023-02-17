@@ -34,6 +34,16 @@ class TestAlerter(Alerter):
             if (retries % 3) != 2:
                 raise RetryableException('Simulating a retryable exception')
 
+    @classmethod
+    def get_default_configuration(cls) -> dict:
+        return {
+            'sleep': {
+                'new': 10.0,
+                'recovery': 3.0
+            },
+            'index': {"new": 0, "recovery": 0}
+        }
+
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_event'
         try:
@@ -60,15 +70,6 @@ class TestAlerter(Alerter):
 
 
 class TestPlugin(IOMAlerterPlugin):
-
-    def get_alerter_default_configuration(self) -> dict:
-        return {
-            'sleep': {
-                'new': 10.0,
-                'recovery': 3.0
-            },
-            'index': {"new": 0, "recovery": 0}
-        }
 
     def get_alerter_class(self):
         return TestAlerter

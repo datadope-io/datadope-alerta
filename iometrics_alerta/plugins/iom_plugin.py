@@ -1,17 +1,15 @@
-import json
 import logging
 import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime
-from json import JSONDecodeError
 from typing import Any, Dict, Optional, Type, Tuple, Union
 
 from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, merge, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config
+from iometrics_alerta import DateTime, merge, get_config
 from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
@@ -47,15 +45,6 @@ class IOMAlerterPlugin(PluginBase, ABC):
     def get_alerter_class(self) -> Type[Alerter]:
         pass
 
-    @abstractmethod
-    def get_alerter_default_configuration(self) -> dict:
-        """
-        Provides alerter default configuration overridable with an environment value.
-
-        :return:
-        """
-        pass
-
     @property
     def global_app_config(self):
         if self.__global_app_config is None:
@@ -65,12 +54,6 @@ class IOMAlerterPlugin(PluginBase, ABC):
     @global_app_config.setter
     def global_app_config(self, new_config):
         self.__global_app_config = new_config
-
-    @property
-    def alerter_config(self):
-        if self.__alerter_config is None:
-            self.__alerter_config = self.read_alerter_config()
-        return self.__alerter_config
 
     @property
     def alerter_name(self) -> str:
@@ -99,33 +82,8 @@ class IOMAlerterPlugin(PluginBase, ABC):
         return {
             BGTadC.NAME: self.alerter_name,
             BGTadC.CLASS: Alerter.get_fullname(self.get_alerter_class()),
-            BGTadC.CONFIG: self.alerter_config,
             BGTadC.PLUGIN: self.name
         }
-
-    def read_alerter_config(self) -> Dict[str, Any]:
-        """
-        Reads alerter config using global app configuration. First get default configuration
-        from alerter and merges it with configuration from environment or config file.
-
-        Configuration key retrieved will be form as'<ALERTER_NAME>_CONFIG'
-        (using uppercase form of alerter_name property).
-
-        Override to implement a different mechanism to get the config for the alerter.
-
-        :return: alerter configuration
-        """
-        default = self.get_alerter_default_configuration() or {}
-        config_key = f"{self.alerter_name.upper()}{ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX}"
-        config = self.get_config(config_key, default={}, config=self.global_app_config)
-        if isinstance(config, str):
-            try:
-                config = json.loads(config)
-            except JSONDecodeError:
-                self.logger.error("Wrong configuration for alerter '%s': '%s'",
-                                  self.alerter_name, config)
-                config = {}
-        return merge(default, config)
 
     def get_alerter_status_for_alert(self, alert):
         return AlerterStatus(alert.attributes.get(self.alerter_attribute_name, {})
@@ -382,7 +340,7 @@ class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
         alerter_class = self.alerter_data[BGTadC.CLASS]
         response = {}
         try:
-            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG], self.alerter_config)
+            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG])
             response = getattr(alerter, operation)(alert, reason)
         except Exception as exc:
             store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,

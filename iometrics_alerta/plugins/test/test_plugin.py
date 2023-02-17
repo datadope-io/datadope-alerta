@@ -13,6 +13,9 @@ logger = getLogger(__name__)
 class TestAlerter(Alerter):
     invocation = 0
 
+    def get_default_configuration(self) -> dict:
+        return {}
+
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         try:
             time.sleep(5)
@@ -43,9 +46,6 @@ class TestAlerter(Alerter):
 
 
 class TestPlugin(IOMSyncAlerterPlugin):
-
-    def get_alerter_default_configuration(self) -> dict:
-        return {}
 
     def get_alerter_class(self):
         return TestAlerter

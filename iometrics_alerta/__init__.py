@@ -297,6 +297,11 @@ def safe_convert(value, type_, operation=None, default=None) -> Any:
         try:
             if type_ in (dict, list):
                 value = json.loads(str(value))
+                if type(value) is not type_:
+                    if type_ is list:
+                        value = [value]
+                    else:
+                        return default
             elif type_ == bool:
                 return str(value).lower() in ('true', 'y', 's', 'yes', 'si', 'sí')
             else:
@@ -699,11 +704,13 @@ class ContextualConfiguration(object):
         :param str operation:
         :return: configuration value and context where it was found
         """
+        alerter = plugin.get_alerter_class()
+        alerter_config = alerter.get_alerter_config(plugin.alerter_name)
         return ContextualConfiguration.get_contextual_config_generic(
             var_name=var_definition.var_name, alert=alert, alerter_name=plugin.alerter_name,
             operation=operation, type_=var_definition.var_type, default=var_definition.default,
             specific_event_tag=var_definition.specific_event_tag,
-            global_config=plugin.global_app_config, alerter_config=plugin.alerter_config,
+            global_config=plugin.global_app_config, alerter_config=alerter_config,
             renderable=var_definition.renderable)
 
     @staticmethod

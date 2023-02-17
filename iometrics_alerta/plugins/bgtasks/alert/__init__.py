@@ -97,8 +97,7 @@ class AlertTask(celery.Task, ABC):
     def _get_alerter(alerter_data, task):
         alerter_name = alerter_data[BGTadC.NAME]
         alerter_class = alerter_data[BGTadC.CLASS]
-        alerter_config = alerter_data[BGTadC.CONFIG]
-        return Alerter.get_alerter_type(alerter_class)(alerter_name, alerter_config, task)
+        return Alerter.get_alerter_type(alerter_class)(alerter_name, task)
 
     @staticmethod
     def _get_attribute_name(alerter_name):

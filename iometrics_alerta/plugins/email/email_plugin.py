@@ -44,8 +44,8 @@ logger = getLogger(__name__)
 
 class EMailAlerter(Alerter):
 
-    def __init__(self, name, config, bgtask=None):
-        super().__init__(name, config, bgtask)
+    def __init__(self, name, bgtask=None):
+        super().__init__(name, bgtask)
         for k, v in self.config.items():
             if ConfigKeyDict.key_transform(k) in ('server', 'tasksdefinition') \
                     and isinstance(v, str):
@@ -151,6 +151,27 @@ class EMailAlerter(Alerter):
             sent = len(to)
         return True, {RETURN_KEY_EMAILS: f"{sent}/{len(to)}"}
 
+    @classmethod
+    def get_default_configuration(cls) -> dict:
+        return {
+            "server": {
+                "host": "smtpserver",
+                "port": 25,
+                "user": None,
+                "password": None,
+                "tls_mode": None,  # Can be starttls or ssl
+                "tls_key_file": None,
+                "tls_cert_file": None,
+                "local_hostname": "myhostname.domain.org"
+            },
+            "sender": "alerta@datadope.io",
+            "subject": {
+                "new": "NEW PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}",
+                "recovery": "RECOVERY FOR PROBLEM {{ alert.event }} in {{ alert.resource }}",
+                "repeat": "REPEATING PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}"
+            }
+        }
+
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return self._process_request(Alerter.process_event.__name__, alert, reason)
 
@@ -171,23 +192,3 @@ class EMailPlugin(IOMAlerterPlugin):
 
     def get_alerter_class(self):
         return EMailAlerter
-
-    def get_alerter_default_configuration(self) -> dict:
-        return {
-            "server": {
-                "host": "smtpserver",
-                "port": 25,
-                "user": None,
-                "password": None,
-                "tls_mode": None,  # Can be starttls or ssl
-                "tls_key_file": None,
-                "tls_cert_file": None,
-                "local_hostname": "myhostname.domain.org"
-            },
-            "sender": "alerta@datadope.io",
-            "subject": {
-                "new": "NEW PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}",
-                "recovery": "RECOVERY FOR PROBLEM {{ alert.event }} in {{ alert.resource }}",
-                "repeat": "REPEATING PROBLEM in {{ alert.resource }}: {{ alert.event }} {{ alert.text }}"
-            }
-        }
