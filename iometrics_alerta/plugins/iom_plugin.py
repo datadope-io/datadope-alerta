@@ -9,7 +9,7 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, merge, get_config
+from iometrics_alerta import DateTime, merge, get_config, thread_local
 from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
@@ -117,6 +117,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
             new_status = new_event_status.value
             data_field = AProcC.KEY_NEW_EVENT
             delay = self.get_processing_delay(alert, operation)
+        thread_local.operation = ATTRIBUTE_KEYS_BY_OPERATION[operation]
         delay = max(10.0, delay) + random.uniform(-5.0, 5.0)  # +/- 5 secs for the configured delay (min config = 10)
         attr_data = alert.attributes.setdefault(self.alerter_attribute_name, {})
         attr_data[AProcC.FIELD_STATUS] = new_status
@@ -192,6 +193,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
     # PluginBase ABSTRACT METHODS IMPLEMENTATION
     #
     def pre_receive(self, alert: Alert, **kwargs) -> Alert:
+        thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
         self.logger.debug("Ignoring pre_receive")
         return alert
@@ -208,6 +210,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         :param kwargs:
         :return:
         """
+        thread_local.alerter_name = self.alerter_name
         post_receive_data = self._prepare_post_receive(alert, AlerterStatus.Scheduled, kwargs)
         if post_receive_data:
             attr_data, begin, delay, event_data, operation, reason, _ = post_receive_data
@@ -240,6 +243,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         return alert
 
     def status_change(self, alert: Alert, status, text: str, **kwargs) -> Any:
+        thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
         current_status = Status(alert.status)
         if status == current_status:
@@ -315,14 +319,17 @@ class IOMAlerterPlugin(PluginBase, ABC):
             return None
 
     def take_action(self, alert: Alert, action: str, text: str, **kwargs) -> Any:
+        thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
         self.logger.debug("Ignoring take_action")
 
     def take_note(self, alert: Alert, text: Optional[str], **kwargs) -> Any:
+        thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
         self.logger.debug("Ignoring take_note")
 
     def delete(self, alert: Alert, **kwargs) -> bool:
+        thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
         self.logger.debug("Ignoring delete")
         return True
@@ -331,6 +338,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
 class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
 
     def post_receive(self, alert: Alert, **kwargs) -> Optional[Alert]:
+        thread_local.alerter_name = self.alerter_name
         post_receive_data = self._prepare_post_receive(alert, AlerterStatus.Processing, kwargs)
         if post_receive_data:
             attr_data, begin, delay, event_data, operation, reason, attribute_name = post_receive_data

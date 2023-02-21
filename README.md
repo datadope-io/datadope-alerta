@@ -189,6 +189,34 @@ file.
 See [Alerta configuration documentation](https://docs.alerta.io/configuration.html) to get more information about
 configuration options.
 
+#### Logging configuration
+
+Logging format strings can use the following fields to enrich log information:
+
+* alert_id: id of the alert being handled.
+* alerter_name: name of the alertar handling the alert.
+* operation: 'new', 'repeat' or 'recovery' will be the possible values for this field.
+
+
+If any of those field is not available, '-' will be printed instead.
+
+These fields can be used for any logger associated to alerta server and in celery task logger. 
+They can't be used in celery logger.
+
+Apart from previous fields, celery task logger can also use the following fields:
+
+* task_id: id of celery task that is running.
+* task_name: name os celery task that is running.
+
+Example of format string configuration variable: 
+
+```python
+CELERYD_TASK_LOG_FORMAT = \
+    "%(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s" \
+    "[[%(name)s|%(processName)s][%(task_name)s|%(task_id)s]]"
+
+```
+
 #### Configuration for Recovery Actions Providers
 
 Use `RA_PROVIDER_<provider>_CONFIG` to provide a dictionary with the provider configuration. 

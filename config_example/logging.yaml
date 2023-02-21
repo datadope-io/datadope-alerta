@@ -47,17 +47,17 @@ LOG_FORMATTER_WSGI: &log_format_wsgi default
 # If log context is a flask request, DEFAULT_FORMATTER_REQUEST_SUFFIX is concatenated to the logger format.
 DEFAULT_FORMATTER_FORMATS: &default_formatter_formats
   iometrics_alerta: >-
-    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s [in %(pathname)s:%(lineno)d]
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s][%(pathname)s:%(lineno)d]]
   alerta: >-
-    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s [in %(pathname)s:%(lineno)d]
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s][%(pathname)s:%(lineno)d]]
   flask: >-
-    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s]]
   urllib3: >-
-    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s]]
   werkzeug: >-
-    '%(asctime)s %(name)s[%(process)d]: %(message)s
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s]]
   default: >-
-    %(asctime)s %(name)s[%(process)d]: [%(levelname)s] %(message)s
+    %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s]]
 # Extra fields available (provided by context filter) for logs coming from requests:
 # request_id, endpoint, method, url, reqargs, data, remote_addr and user.
 DEFAULT_FORMATTER_REQUEST_SUFFIX: &default_formatter_request >-
@@ -119,6 +119,8 @@ filters:
     methods: *log_methods
   context:
     (): alerta.utils.logging.ContextFilter
+  alerta:
+    (): iometrics_alerta.AlertIdFilter
 handlers:
   console:
     class: logging.StreamHandler
@@ -126,6 +128,7 @@ handlers:
     filters:
       - context
       - requests
+      - alerta
     stream: 'ext://sys.stdout'
   file:
     class: logging.handlers.RotatingFileHandler
@@ -133,6 +136,7 @@ handlers:
     filters:
       - context
       - requests
+      - alerta
     filename: *log_file
     maxBytes: *log_max_bytes
     backupCount: *log_backup_count
@@ -142,6 +146,7 @@ handlers:
     filters:
       - context
       - requests
+      - alerta
     stream: 'ext://flask.logging.wsgi_errors_stream'
 loggers: *loggers
 root:

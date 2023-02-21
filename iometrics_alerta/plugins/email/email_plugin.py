@@ -104,7 +104,7 @@ class EMailAlerter(Alerter):
             files = []
 
         if not to:
-            logger.warning("[EMAIL]NO ADDRESSES TO SEND EMAIL TO")
+            logger.warning("NO ADDRESSES TO SEND EMAIL TO")
             return False, self.failure_response(reason=ERROR_REASON_NO_RECIPIENTS,
                                                 message=f"No destination email addresses has been received")
         server_config = self.config[CONFIG_KEY_SERVER]
@@ -125,7 +125,7 @@ class EMailAlerter(Alerter):
                 subject = match[0]
             else:
                 subject = full_message.strip().split('\n')[0]
-        logger.info("[EMAIL]SENDING EMAIL USING SERVER `%s:%d' WITH SUBJECT: '%s' TO %d EMAIL ADDRESSES",
+        logger.info("SENDING EMAIL USING SERVER `%s:%d' WITH SUBJECT: '%s' TO %d EMAIL ADDRESSES",
                     host, port, subject, len(to))
         if not content_type:
             if '<!doctype html>' in full_message.lower() \
@@ -136,7 +136,7 @@ class EMailAlerter(Alerter):
                 content_type = 'text/plain'
         dry_run = self.is_dry_run(alert, operation)
         if dry_run:
-            logger.debug("[EMAIL]BODY: %s", body)
+            logger.debug("BODY: %s", body)
             return True, {RETURN_KEY_EMAILS: "0/0", "DRY-RUN": True}
         response = send_email(smtp_server=host, smtp_port=port,
                               smtp_login_user=user, smtp_login_password=password,
@@ -144,10 +144,10 @@ class EMailAlerter(Alerter):
                               files=files, tls_mode=tls_mode, cert_file=cert_file, key_file=key_file,
                               local_hostname=local_hostname)
         if response:
-            logger.warning("[EMAIL]EMAILS SENT PARTIALLY: %d OF %d EMAIL ADDRESSES WERE WRONG", len(response), len(to))
+            logger.warning("EMAILS SENT PARTIALLY: %d OF %d EMAIL ADDRESSES WERE WRONG", len(response), len(to))
             sent = len(to) - len(response)
         else:
-            logger.info("[EMAIL]EMAILS SENT SUCCESSFULLY TO %d EMAIL ADDRESSES", len(to))
+            logger.info("EMAILS SENT SUCCESSFULLY TO %d EMAIL ADDRESSES", len(to))
             sent = len(to)
         return True, {RETURN_KEY_EMAILS: f"{sent}/{len(to)}"}
 
@@ -178,7 +178,7 @@ class EMailAlerter(Alerter):
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         event_tags = self.get_event_tags(alert, operation='recovery')
         if TAG_EMAILS_NO_RECOVERY in event_tags:
-            logger.info("[EMAIL]IGNORING RECOVERY ACTION. SHOULD USE 'IGNORE_RECOVERY' INSTEAD OF %s. Exiting",
+            logger.info("IGNORING RECOVERY ACTION. SHOULD USE 'IGNORE_RECOVERY' INSTEAD OF %s. Exiting",
                         TAG_EMAILS_NO_RECOVERY)
             return False, self.failure_response(reason=ERROR_REASON_IGNORE_RECOVERY,
                                                 message=f"Received event tag {TAG_EMAILS_NO_RECOVERY}")

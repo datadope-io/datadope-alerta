@@ -6,7 +6,7 @@ from alerta.models.enums import Status
 
 from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, ConfigKeyDict, ContextualConfiguration, \
     RecoveryActionsDataFields
-from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
+from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, thread_local
 from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
 from iometrics_alerta.plugins import AlerterStatus
 from iometrics_alerta.plugins.iom_plugin import IOMAlerterPlugin
@@ -46,6 +46,7 @@ def initialize_plugins(plugins_object, config):
 
 
 def rules(alert, plugins, config):  # noqa
+    thread_local.alert_id = alert.id
     global _plain_plugins, _alerters_plugins
     if _plain_plugins is None:
         _plain_plugins, _alerters_plugins = initialize_plugins(plugins, config)

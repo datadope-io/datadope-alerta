@@ -15,11 +15,15 @@ from jinja2 import TemplateNotFound
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime, \
-    alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge
+    alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
+    AlertIdFilter
 
 
 def getLogger(name):  # noqa
-    return get_task_logger(name)
+    filter_ = AlertIdFilter.get_instance()
+    logger_ = get_task_logger(name)
+    logger_.addFilter(filter_)
+    return logger_
 
 
 logger = getLogger('iometrics_alerta.plugins')

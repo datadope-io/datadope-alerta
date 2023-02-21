@@ -77,6 +77,7 @@ class IOMAPreprocessPlugin(PluginBase):
         pass
 
     def pre_receive(self, alert: 'Alert', **kwargs) -> 'Alert':
+        logger.debug("PREPROCESSING ALERT FOR IOMETRICS")
         # Ensure eventTags is a dict
         alert_attributes = ConfigKeyDict(alert.attributes)
         config = kwargs['config']

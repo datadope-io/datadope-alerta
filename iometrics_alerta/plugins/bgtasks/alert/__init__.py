@@ -8,7 +8,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError, Time
 # noinspection PyPackageRequirements
 from celery.utils.time import get_exponential_backoff_interval
 
-from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, DateTime
+from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, DateTime, thread_local
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException, ATTRIBUTE_KEYS_BY_OPERATION
 
@@ -164,22 +164,23 @@ class AlertTask(celery.Task, ABC):
         success, attribute_data = self._prepare_result(status=status, retval=retval, start_time=start_time,
                                                        end_time=end_time, duration=duration,
                                                        retries=self.request.retries)
-        self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s FOR ALERT '%s' IN %s:%s -> %s",
-                         duration, 'SUCCESS' if success else 'FAILURE', alert.id, alerter_name,
-                         self.get_operation(), retval)
+        self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s -> %s",
+                         duration, 'SUCCESS' if success else 'FAILURE', retval)
         self._update_alerter_attribute(alert, alerter_name, attribute_data, update_db)
 
 
     def before_start(self, task_id, args, kwargs):  # noqa
         start_time = datetime.now()
         alert_id, alerter_name, operation = self._get_parameters(kwargs)
+        thread_local.alert_id = alert_id
+        thread_local.alerter_name = alerter_name
+        thread_local.operation = ATTRIBUTE_KEYS_BY_OPERATION[operation]
         is_retrying = self.request.retries > 0
         if is_retrying:
-            self.logger.info("Retry %d for task '%s:%s'. Alert: '%s'", self.request.retries,
-                             alerter_name, operation, alert_id)
+            self.logger.info("Retry %d", self.request.retries)
         else:
             self._time_management[task_id] = start_time
-            self.logger.info("Starting task for '%s:%s'. Alert: '%s'", alerter_name, operation, alert_id)
+            self.logger.info("Starting task")
         attribute_name = self._get_attribute_name(alerter_name)
         with app.app_context():
             alert_obj = Alert.find_by_id(alert_id)
@@ -243,16 +244,15 @@ class AlertTask(celery.Task, ABC):
                                                    exc=exc, einfo=einfo, kwargs=kwargs)
         if should_retry:
             countdown = self.request.properties.get('retry_spec', {}).get('_countdown_', 0.0)
-            self.logger.info("SCHEDULED RETRY %d/%d IN %.0f secs. FOR ALERT '%s' IN %s:%s -> %s",
-                             self.request.retries + 1, self.override_max_retries,
-                             countdown, alert_id, alerter_name, operation, exc)
+            self.logger.info("SCHEDULED RETRY %d/%d IN %.0f secs -> %s",
+                             self.request.retries + 1, self.override_max_retries, countdown, exc)
         else:
             revoke_task(task_id)
 
     def run(self, alerter_data: dict, alert: dict, reason: Optional[str]):
         alerter = self._get_alerter(alerter_data, self)
         operation = self.get_operation()
-        self.logger.info("Running background task '%s:%s'", alerter.__class__.__name__, operation)
+        self.logger.info("Running background task")
         try:
             response = getattr(alerter, operation)(Alert.parse(alert), reason)
             return response

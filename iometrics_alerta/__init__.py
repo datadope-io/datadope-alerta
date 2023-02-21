@@ -2,6 +2,7 @@ import builtins
 import json
 import logging
 import os
+import threading
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import datetime, date
@@ -18,6 +19,7 @@ import pytz
 from alerta.models.alert import Alert
 from alerta.utils.format import CustomJSONEncoder as AlertaCustomJSONEncoder
 
+thread_local = threading.local()
 
 logger = logging.getLogger('iometrics_alerta')
 
@@ -125,6 +127,25 @@ class CustomJSONEncoder(AlertaCustomJSONEncoder):
         if isinstance(o, ConfigKeyDict):
             return o.store
         return super().default(o)
+
+
+class AlertIdFilter(logging.Filter):
+    _instance = None
+    _properties = ['alert_id', 'alerter_name', 'operation']
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = AlertIdFilter()
+        return cls._instance
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for prop in self._properties:
+            if value := getattr(thread_local, prop, None):
+                setattr(record, prop, value)
+            else:
+                setattr(record, prop, '-')
+        return True
 
 
 class AlerterProcessAttributeConstant:
