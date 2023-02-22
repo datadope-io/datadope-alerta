@@ -4,7 +4,7 @@ from typing import List
 
 from alerta.models.enums import Status
 
-from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, ConfigKeyDict, ContextualConfiguration, \
+from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration, \
     RecoveryActionsDataFields
 from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, thread_local
 from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
@@ -63,7 +63,7 @@ def rules(alert, plugins, config):  # noqa
         # Alerters and recovery actions are not executed during blackout or if expired
         return [plugins[x] for x in result]
 
-    alert_attributes = ConfigKeyDict(alert.attributes)
+    alert_attributes = NormalizedDictView(alert.attributes)
     alerters = ContextualConfiguration.get_global_attribute_value(GAttr.ALERTERS, alert,
                                                                   global_config=config)
 

@@ -14,7 +14,7 @@ from jinja2 import TemplateNotFound
 
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
-    ConfigKeyDict, render_template, AlerterProcessAttributeConstant, DateTime, \
+    NormalizedDictView, render_template, AlerterProcessAttributeConstant, DateTime, \
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
     AlertIdFilter
 
@@ -64,7 +64,7 @@ class Alerter(ABC):
     def __init__(self, name, bgtask=None):
         self.name = name
         self.bgtask = bgtask
-        self.config = ConfigKeyDict(self.get_alerter_config(self.name))
+        self.config = NormalizedDictView(self.get_alerter_config(self.name))
 
     @classmethod
     @abstractmethod
@@ -172,7 +172,7 @@ class Alerter(ABC):
         :return:
         """
         data_key = self.name + ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
-        alert_attributes = ConfigKeyDict(alert.attributes)
+        alert_attributes = NormalizedDictView(alert.attributes)
         alerter_data = alert_attributes.get_for_operation(data_key, operation, {})
         return safe_convert(alerter_data, dict, operation, default={})
 
@@ -206,7 +206,7 @@ class Alerter(ABC):
         :param operation:
         :return:
         """
-        attributes = ConfigKeyDict(alert.attributes)
+        attributes = NormalizedDictView(alert.attributes)
         event_tags = self.get_event_tags(alert, operation)
         return render_template(template_path,
                                alert=alert,
@@ -236,7 +236,7 @@ class Alerter(ABC):
         :param operation:
         :return:
         """
-        attributes = ConfigKeyDict(alert.attributes)
+        attributes = NormalizedDictView(alert.attributes)
         event_tags = self.get_event_tags(alert, operation)
         return render_value(value,
                             alert=alert,

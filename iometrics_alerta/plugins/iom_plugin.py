@@ -9,7 +9,7 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, merge, get_config, thread_local
+from iometrics_alerta import DateTime, merge, get_config, thread_local, AlertIdFilter
 from iometrics_alerta import AlerterProcessAttributeConstant as AProcC
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
@@ -32,6 +32,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         name = name or self.__module__.rsplit('.', 1)[0]
         super(IOMAlerterPlugin, self).__init__(name)
         self.logger = logging.getLogger(self.name)
+        self.logger.addFilter(AlertIdFilter.get_instance())
         self.__global_app_config = None
         self.__alerter_name = None
         self.__alerter_config = None
@@ -348,7 +349,7 @@ class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
         alerter_class = self.alerter_data[BGTadC.CLASS]
         response = {}
         try:
-            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_data[BGTadC.CONFIG])
+            alerter = Alerter.get_alerter_type(alerter_class)(self.alerter_name)
             response = getattr(alerter, operation)(alert, reason)
         except Exception as exc:
             store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,

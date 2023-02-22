@@ -1,4 +1,3 @@
-import os
 from datetime import datetime
 
 from pkg_resources import iter_entry_points
@@ -8,8 +7,8 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, ConfigKeyDict, ContextualConfiguration as CConfig, safe_convert, \
-    VarDefinition
+from iometrics_alerta import DateTime, NormalizedDictView, ContextualConfiguration as CConfig, safe_convert, \
+    VarDefinition, get_config
 from iometrics_alerta import get_hierarchical_configuration
 from iometrics_alerta import GlobalAttributes, RecoveryActionsStatus
 from iometrics_alerta import RecoveryActionsDataFields as RADataFields
@@ -46,38 +45,16 @@ class RecoveryActionsPlugin(PluginBase):
         return max(2, action_delay - consumed_time)
 
     def pre_receive(self, alert: 'Alert', **kwargs) -> 'Alert':
+        app_config = kwargs['config']
         recovery_actions_key = GlobalAttributes.RECOVERY_ACTIONS.var_name
-        normalized_key = ConfigKeyDict.key_transform(recovery_actions_key)
-
-        # Configuration from config file
-        app_config = ConfigKeyDict(kwargs['config'])
-        if normalized_key in app_config:
-            ra_global_config = ConfigKeyDict(safe_convert(app_config[normalized_key], dict))
-        else:
-            ra_global_config = ConfigKeyDict()
-            for key, value in app_config.items():
-                if key.startswith(normalized_key):
-                    ra_global_config[key[len(normalized_key):]] = value
-
-        # Configuration from environment
-        env_config = ConfigKeyDict(os.environ)
-        if normalized_key in app_config:
-            ra_env_config = ConfigKeyDict(safe_convert(env_config[normalized_key], dict))
-        else:
-            ra_env_config = ConfigKeyDict()
-            for key, value in env_config.items():
-                if key.startswith(normalized_key):
-                    ra_env_config[key[len(normalized_key):]] = value
+        ra_config = get_config(key=recovery_actions_key, type=dict, config=app_config)
 
         # Configuration from alert
-        alert_attributes = ConfigKeyDict(alert.attributes)
-        ra_alert_config = ConfigKeyDict(safe_convert(
+        alert_attributes = NormalizedDictView(alert.attributes)
+        ra_alert_config = NormalizedDictView(safe_convert(
             alert_attributes.get(recovery_actions_key, {}), dict))
-        original_key = alert_attributes.original_key(recovery_actions_key)
-        if original_key and original_key != recovery_actions_key:
-            alert.attributes.pop(original_key, None)
 
-        ordered_configs = [ra_alert_config, ra_env_config, ra_global_config]
+        ordered_configs = [ra_alert_config, ra_config]
 
         recovery_actions_config = {}
         provider_var = RAConfigFields.PROVIDER
@@ -109,7 +86,7 @@ class RecoveryActionsPlugin(PluginBase):
 
         if recovery_actions_config.get(RAConfigFields.ACTIONS.var_name):
             # If no action configure, ignore.
-            alert.attributes[recovery_actions_key] = recovery_actions_config
+            alert_attributes[recovery_actions_key] = recovery_actions_config
         return alert
 
     def take_action(self, alert: 'Alert', action: str, text: str, **kwargs) -> Any:
@@ -151,8 +128,8 @@ class RecoveryActionsPlugin(PluginBase):
                 provider_ep = self._recovery_actions_providers[provider]
                 provider_class = f"{provider_ep.module_name}:{provider_ep.attrs[0]}"
                 countdown = self.get_processing_delay(alert, action_delay)
-                logger.info("Scheduled recovery actions for alert '%s' to run in %.0f seconds in queue '%s'",
-                            alert.id, countdown, queue)
+                logger.info("Scheduled recovery actions to run in %.0f seconds in queue '%s'",
+                            countdown, queue)
                 task = launch_actions.apply_async(
                     kwargs=dict(
                         alert_id=alert.id,
@@ -171,8 +148,7 @@ class RecoveryActionsPlugin(PluginBase):
                 alert = do_alert(alert, alerters, app_config, self.alerter_plugins)
                 return alert
         else:
-            logger.debug("Recovery actions for alert '%s' already in progress. Background tasks in charge",
-                         alert.id)
+            logger.debug("Recovery actions already in progress. Background tasks in charge")
             return None
 
     def status_change(self, alert: 'Alert', status: str, text: str, **kwargs) -> Any:
@@ -188,8 +164,7 @@ class RecoveryActionsPlugin(PluginBase):
                 if running_task:
                     revoke_task(running_task)
                 if status == Status.Closed:
-                    logger.info("Alert '%s' recovered while processing recovey actions. Cancelling alerting",
-                                alert.id)
+                    logger.info("Recovered while processing recovery actions. Cancelling alerting")
                     recovery_actions_data[RADataFields.FIELD_RECOVERED_AT] = DateTime.iso8601_utc(datetime.now())
                 return alert, status, text
         return None

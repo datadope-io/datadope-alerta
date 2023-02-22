@@ -76,7 +76,7 @@ May be overriden by configuration.
 """
 
 
-processed_environment: Optional['ConfigKeyDict'] = None
+processed_environment: Optional['NormalizedDictView'] = None
 
 
 def json_serial(obj):
@@ -124,8 +124,8 @@ def render_template(template_path, **kwargs):
 
 class CustomJSONEncoder(AlertaCustomJSONEncoder):
     def default(self, o: Any) -> Any:
-        if isinstance(o, ConfigKeyDict):
-            return o.store
+        if isinstance(o, NormalizedDictView):
+            return o.dict()
         return super().default(o)
 
 
@@ -200,7 +200,6 @@ class BGTaskAlerterDataConstants:
     __slots__ = ()
     NAME = 'name'
     CLASS = 'class'
-    CONFIG = 'config'
     PLUGIN = 'plugin_name'
 
 
@@ -278,7 +277,8 @@ def merge(dict1, dict2):
     :return: dict1 reference with updated value.
     """
     for k in dict2:
-        if k in dict1 and isinstance(dict1[k], dict) and isinstance(dict2[k], dict):
+        if k in dict1 and isinstance(dict1[k], (dict, NormalizedDictView)) \
+                and isinstance(dict2[k], (dict, NormalizedDictView)):
             merge(dict1[k], dict2[k])
         else:
             dict1[k] = dict2[k]
@@ -337,69 +337,70 @@ def safe_convert(value, type_, operation=None, default=None) -> Any:
 
 
 # noinspection PyShadowingBuiltins
-def get_config(key, default=None, type=None, config=None):
-    if key in processed_environment:
-        rv = processed_environment[key]
-    else:
-        if config is None:
-            config = flask.current_app.config
-        try:
-            rv = config.get(key, default)
-        except KeyError:
-            rv = default
+def get_config(key, default=None, type=None, config: dict = None):
     if default is not None and type is None:
         type = builtins.type(default)
-    if rv is not None and type is not None:
-        rv = safe_convert(rv, type)
-    return rv
+
+    rve = None
+    if key in processed_environment:
+        rve = safe_convert(processed_environment[key], type_=type)
+        if type is not dict:
+            return rve
+
+    if config is None:
+        config = flask.current_app.config
+    if not isinstance(config, NormalizedDictView):
+        config = NormalizedDictView(config)
+    try:
+        rv = config.get(key, default)
+    except KeyError:
+        rv = default
+    rv = safe_convert(rv, type)
+
+    if type is not dict:
+        return rv
+
+    return merge(rv or {}, rve or {})
 
 
-class ConfigKeyDict(MutableMapping):
-    """
-    A dictionary whose keys can be requested in camel case or snake case.
-    It removes '_'. '-', '.' and is case insensitive
-
-    *the_var*, *THE_VAR*, *THEVAR*, *thevar*, *TheVar*, *thevar*... correspond to the same dict entry.
-    """
-
-    def __init__(self, *args, **kwargs):
-        self.store = dict()
-        self.keys_store = dict()
-        if not args or (isinstance(args, tuple) and args[0] is None):
-            args = []
-        if kwargs is None:
-            kwargs = {}
-        self.update(dict(*args, **kwargs))  # use the free update to set keys
+class NormalizedDictView(MutableMapping):
+    def __init__(self, original: dict):
+        self.__store = original
+        self.__keys_store = dict()
+        self.update(original)  # use the free update to set keys
 
     def __getitem__(self, key):
-        return self.store[self.key_transform(key)]
+        return self.__store[self.__keys_store[self.key_transform(key)]]
 
     def __setitem__(self, key, value):
-        new_key = self.key_transform(key)
-        self.store[new_key] = value
-        if new_key not in self.keys_store:
-            self.keys_store[new_key] = key
+        normalized_key = self.key_transform(key)
+        existing_key = self.__keys_store.get(normalized_key)
+        self.__keys_store[normalized_key] = key
+        if existing_key and existing_key != key:
+            del self.__store[existing_key]
+        self.__store[key] = value
 
     def __delitem__(self, key):
-        new_key = self.key_transform(key)
-        del self.store[new_key]
-        del self.keys_store[new_key]
+        normalized_key = self.key_transform(key)
+        existing_key = self.__keys_store.pop(normalized_key, None)
+        if existing_key:
+            del self.__store[existing_key]
 
     def __contains__(self, key):
-        new_key = self.key_transform(key)
-        return new_key in self.store
+        normalized_key = self.key_transform(key)
+        return normalized_key in self.__keys_store
 
     def __iter__(self):
-        return iter(self.store)
+        return iter(self.__store)
 
     def __len__(self):
-        return len(self.store)
+        return len(self.__store)
 
     def __repr__(self):
-        return self.store.__repr__()
+        return self.__store.__repr__()
 
     def __str__(self):
-        return self.store.__str__()
+        return self.__store.__str__()
 
     @staticmethod
     def key_transform(key):
@@ -415,17 +416,11 @@ class ConfigKeyDict(MutableMapping):
         return self.get(key, default=default)
 
     def original_key(self, key):
-        new_key = self.key_transform(key)
-        return self.keys_store.get(new_key)
+        normalized_key = self.key_transform(key)
+        return self.__keys_store.get(normalized_key)
 
-    def normalized(self) -> dict:
-        return self.store
-
-    def original_dict(self) -> Dict[str, Any]:
-        result = {}
-        for k, v in self.store.items():
-            result[self.original_key(k)] = v
-        return result
+    def dict(self) -> Dict[str, Any]:
+        return self.__store
 
 
 class ConfigurationContext(str, Enum):
@@ -447,7 +442,7 @@ class VarDefinition:
     renderable: bool = True
 
 
-def get_hierarchical_configuration(var: VarDefinition, ordered_configs: List[MutableMapping],
+def get_hierarchical_configuration(var: VarDefinition, ordered_configs: List[dict | NormalizedDictView],
                                    prefixes: Optional[List[str]] = None):
     """
     Read a configuration value. The value will be searched in the list of
@@ -472,11 +467,12 @@ def get_hierarchical_configuration(var: VarDefinition, ordered_configs: List[Mut
     if prefixes is None:
         prefixes = []
     for config in ordered_configs:
-        config = ConfigKeyDict(config)
+        if not isinstance(config, NormalizedDictView):
+            config = NormalizedDictView(config)
         for prefix in prefixes:
             if prefix in config and isinstance(config.get(prefix), dict):
                 if var_name in config[prefix]:
-                    return config[prefix][var_name]
+                    return safe_convert(config[prefix][var_name], type_=type_)
             var = prefix + var_name
             if var in config:
                 return safe_convert(config[var], type_=type_)
@@ -791,15 +787,15 @@ class ContextualConfiguration(object):
     @staticmethod
     def get_event_tags(alert, operation=None):
         key_name = GlobalAttributes.EVENT_TAGS.var_name
-        alert_attributes = ConfigKeyDict(alert.attributes)
-        config_attributes = ConfigKeyDict(flask.current_app.config)
-        alert_event_tags = ConfigKeyDict(safe_convert(alert_attributes.get(key_name, {}), dict))
+        alert_attributes = NormalizedDictView(alert.attributes)
+        config_attributes = NormalizedDictView(flask.current_app.config)
+        alert_event_tags = NormalizedDictView(safe_convert(alert_attributes.get(key_name, {}), dict))
         if operation and operation in alert_event_tags:
             alert_event_tags = alert_event_tags[operation]
-        config_event_tags = ConfigKeyDict(safe_convert(config_attributes.get(key_name, {}), dict))
+        config_event_tags = NormalizedDictView(safe_convert(config_attributes.get(key_name, {}), dict))
         if operation and operation in config_event_tags:
             config_event_tags = config_event_tags[operation]
-        return ConfigKeyDict({**config_event_tags, **alert_event_tags})
+        return NormalizedDictView({**config_event_tags, **alert_event_tags})
 
     @staticmethod
     def get_contextual_config_generic(var_name: str, alert: Optional[Alert], alerter_name: str, operation: str = None,
@@ -834,10 +830,10 @@ class ContextualConfiguration(object):
         if is_dict is None:
             is_dict = type_ == dict if type_ is not None else None
 
-        alert_attributes = ConfigKeyDict(alert.attributes) if alert else ConfigKeyDict()
-        alerter_config = ConfigKeyDict(alerter_config)
+        alert_attributes = NormalizedDictView(alert.attributes) if alert else NormalizedDictView({})
+        alerter_config = NormalizedDictView(alerter_config)
         operation_key = ALERTERS_TASK_BY_OPERATION[operation] if operation else None
-        pretty_alert = alert_pretty_json_string(alert)
+        pretty_alert = alert_pretty_json_string(alert) if alert else {}
 
         # From event tags attribute. if specific_event_tag is provided, check first.
         # First try with the prefix of the operation ('new' or 'recovery') if tag name doesn't start with that prefix.
@@ -864,7 +860,7 @@ class ContextualConfiguration(object):
         # From attributes
         if alerter_name:
             alerter_attributes_dict_var = alerter_name+ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX
-            alert_alerter_attributes = ConfigKeyDict(safe_convert(
+            alert_alerter_attributes = NormalizedDictView(safe_convert(
                 alert_attributes.get_for_operation(alerter_attributes_dict_var, operation, {}),
                 dict, operation))
             from_attr = safe_convert(alert_alerter_attributes.get_for_operation(var_name, operation), type_, operation)
@@ -906,7 +902,7 @@ class ContextualConfiguration(object):
 
         # From alerter global configuration: <ALERTER_NAME>_<VAR> from env var or global config
         # If is a dict, merge global config with env var (env var will have more priority)
-        global_config = ConfigKeyDict(global_config)
+        global_config = NormalizedDictView(global_config)
         alerter_key = f"{alerter_name}{var_name}"
         from_global_alerter_env = safe_convert(processed_environment.get(alerter_key), type_, operation)
         if from_global_alerter_env is not None and is_dict is None:
@@ -989,7 +985,7 @@ class ContextualConfiguration(object):
 
 
 def preprocess_environment():
-    processed_env = ConfigKeyDict()
+    processed_env = NormalizedDictView({})
     for k, v in os.environ.items():
         parent, _, child = k.partition('__')
         if parent and child:

@@ -7,7 +7,7 @@ from alerta.models.alert import Alert
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime
-from iometrics_alerta import ConfigKeyDict, safe_convert
+from iometrics_alerta import NormalizedDictView, safe_convert
 from iometrics_alerta.plugins import getLogger
 
 logger = getLogger(__name__)
@@ -16,25 +16,17 @@ logger = getLogger(__name__)
 class IOMAPreprocessPlugin(PluginBase):
 
     @staticmethod
-    def adapt_event_tags(alert, alert_attributes):
+    def adapt_event_tags(alert_attributes: NormalizedDictView):
         event_tags_key = GAttr.EVENT_TAGS.var_name
         if event_tags_key in alert_attributes:
             event_tags = safe_convert(alert_attributes[event_tags_key], dict)
-            alert.attributes[event_tags_key] = event_tags
             alert_attributes[event_tags_key] = event_tags
-            original_key = alert_attributes.original_key(event_tags_key)
-            if original_key and original_key != event_tags_key:
-                alert.attributes.pop(original_key, None)
 
     @staticmethod
-    def adapt_alerters(alert, alert_attributes, config):
+    def adapt_alerters(alert, alert_attributes: NormalizedDictView, config):
         alerters_key = GAttr.ALERTERS.var_name
         alerters = CConfig.get_global_attribute_value(GAttr.ALERTERS, alert, global_config=config)
         if alerters is not None:
-            original_key = alert_attributes.original_key(alerters_key)
-            if original_key and original_key != alerters_key:
-                alert.attributes.pop(original_key)
-            alert.attributes[alerters_key] = alerters
             alert_attributes[alerters_key] = alerters
 
     @staticmethod
@@ -49,21 +41,15 @@ class IOMAPreprocessPlugin(PluginBase):
                 rec_dt = pytz.utc.localize(rec_dt)
             else:
                 rec_dt = datetime.now().astimezone(pytz.utc)
-            alert.attributes[close_at_key] = rec_dt + timedelta(seconds=auto_close_after)
-            alert_attributes[close_at_key] = alert.attributes[close_at_key]
+            alert_attributes[close_at_key] = rec_dt + timedelta(seconds=auto_close_after)
         if close_at_key in alert_attributes:
             close_at = alert_attributes[close_at_key]
-            original_key = alert_attributes.original_key(close_at_key)
             if not isinstance(close_at, datetime):
                 try:
-                    alert.attributes[close_at_key] = DateTime.parse(str(close_at))
-                    alert_attributes[close_at_key] = alert.attributes[close_at_key]
+                    alert_attributes[close_at_key] = DateTime.parse(str(close_at))
                 except ValueError as e:
                     logger.warning("Cannot parse '%s' to datetime for attribute '%s' in alert '%s': %s",
                                    close_at, close_at_key, alert.id, e)
-                    close_at_key = ''
-            if original_key and original_key != close_at_key:
-                alert.attributes.pop(original_key, None)
 
     @staticmethod
     def adapt_recovery_actions(alert, alert_attributes, config):
@@ -79,9 +65,9 @@ class IOMAPreprocessPlugin(PluginBase):
     def pre_receive(self, alert: 'Alert', **kwargs) -> 'Alert':
         logger.debug("PREPROCESSING ALERT FOR IOMETRICS")
         # Ensure eventTags is a dict
-        alert_attributes = ConfigKeyDict(alert.attributes)
+        alert_attributes = NormalizedDictView(alert.attributes)
         config = kwargs['config']
-        self.adapt_event_tags(alert, alert_attributes)
+        self.adapt_event_tags(alert_attributes)
         self.adapt_alerters(alert, alert_attributes, config)
         self.adapt_auto_close(alert, alert_attributes, config)
         self.adapt_recovery_actions(alert, alert_attributes, config)

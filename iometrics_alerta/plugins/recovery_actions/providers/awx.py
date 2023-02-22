@@ -3,7 +3,7 @@ from datetime import datetime
 
 import requests
 
-from iometrics_alerta import RecoveryActionsFields, ConfigKeyDict, DateTime
+from iometrics_alerta import RecoveryActionsFields, NormalizedDictView, DateTime
 from . import RecoveryActionsProvider, getLogger, RecoveryActionsResponse, RecoveryActionsResponseStatus
 
 logger = getLogger(__name__)
@@ -28,10 +28,10 @@ class Provider(RecoveryActionsProvider):
     def execute_actions(self, alert, actions, recovery_actions_config,
                         retry_operation_id=None) -> RecoveryActionsResponse:
         if retry_operation_id:
-            logger.info("[AWX][Alert '%s']Executing job '%s' again", alert.id, retry_operation_id)
+            logger.info("Executing job '%s' again", retry_operation_id)
             return self.retry_job(retry_operation_id)
         else:
-            logger.info("[AWX][Alert '%s']Executing actions '%s'", alert.id, ', '.join(actions))
+            logger.info("Executing actions '%s'", ', '.join(actions))
             return self.launch_new_job(alert, actions, recovery_actions_config)
 
     def get_execution_status(self, alert_id, operation_id) -> RecoveryActionsResponse:
@@ -54,29 +54,29 @@ class Provider(RecoveryActionsProvider):
         if status_code == 200 and json_response:
             job_status = json_response.get('status', 'not_available')
             if job_status == 'successful':
-                logger.info("[AWX][Alert '%s']Job %s finished successfully", alert_id, operation_id)
+                logger.info("Job %s finished successfully", operation_id)
                 response_info['info']['message'] = f"Job {operation_id} finished successfully"
                 finish_time = self.get_finish_time(operation_id, json_response)
                 return RecoveryActionsResponse(RecoveryActionsResponseStatus.RESPONSE_OK, operation_id,
                                                response_info, finish_time)
 
             elif job_status in ('failed', 'error'):
-                logger.info("A[AWX][Alert '%s']Job %s failed with status %s", alert_id, operation_id, job_status)
+                logger.info("Job %s failed with status %s", operation_id, job_status)
                 response_info['info']['message'] = f"Job {operation_id} failed with status {job_status}"
                 finish_time = self.get_finish_time(operation_id, json_response)
                 return RecoveryActionsResponse(RecoveryActionsResponseStatus.RESPONSE_ERROR, operation_id,
                                                response_info, finish_time)
             elif job_status == 'canceled':
-                logger.info("[AWX][Alert '%s']Job %s was cancelled", alert_id, operation_id)
-                raise Exception(f"Job {operation_id} was cancelled", alert_id)
+                logger.info("Job %s was cancelled", operation_id)
+                raise Exception(f"Job {operation_id} was cancelled")
             else:
-                logger.info("[AWX][Alert '%s']Job '%s' still running (status = %s)", alert_id, operation_id, job_status)
+                logger.info("Job '%s' still running (status = %s)", operation_id, job_status)
                 response_info['info']['message'] = f"Job {operation_id} not finished yet"
                 return RecoveryActionsResponse(RecoveryActionsResponseStatus.WAITING_RESPONSE, operation_id,
                                                response_info)
         else:
-            logger.warning("[AWX][Alert '%s']Error (status_code: %d) getting job %d status: %s",
-                           alert_id, status_code, operation_id, json_response)
+            logger.warning("Error (status_code: %d) getting job %d status: %s",
+                           status_code, operation_id, json_response)
             if status_code == 404:
                 response_info['info']['message'] = f"Job {operation_id} not found"
                 return RecoveryActionsResponse(RecoveryActionsResponseStatus.RESPONSE_ERROR,
@@ -149,11 +149,11 @@ class Provider(RecoveryActionsProvider):
 
     @staticmethod
     def create_awx_data(alert, role_list, job_config):
-        tags = ConfigKeyDict(job_config)
+        tags = NormalizedDictView(job_config)
         host = tags.get('limit', alert.resource)
         if not host:
             exc = "NO LIMIT FOUND IN ALERT INFO. CANNOT EXECUTE TASK."
-            logger.warning("[AWX][Alert %s]%s", alert.id, exc)
+            logger.warning("%s", exc)
             raise Exception(exc)
 
         extra_vars = job_config.get('extra_vars', {})
@@ -180,7 +180,7 @@ class Provider(RecoveryActionsProvider):
             try:
                 finish_time = DateTime.parse_utc(finish_time_str)
             except Exception:
-                logger.warning("[AWX]Wrong finish time format for job '%s': '%s'", job_id, finish_time_str)
+                logger.warning("Wrong finish time format for job '%s': '%s'", job_id, finish_time_str)
                 finish_time = None
         if not finish_time:
             finish_time = DateTime.make_aware_utc(datetime.now())
