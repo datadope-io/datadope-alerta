@@ -6,7 +6,7 @@ import pytz
 from alerta.models.alert import Alert
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime
+from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime, thread_local
 from iometrics_alerta import NormalizedDictView, safe_convert
 from iometrics_alerta.plugins import getLogger
 
@@ -63,15 +63,20 @@ class IOMAPreprocessPlugin(PluginBase):
         pass
 
     def pre_receive(self, alert: 'Alert', **kwargs) -> 'Alert':
-        logger.debug("PREPROCESSING ALERT FOR IOMETRICS")
-        # Ensure eventTags is a dict
-        alert_attributes = NormalizedDictView(alert.attributes)
-        config = kwargs['config']
-        self.adapt_event_tags(alert_attributes)
-        self.adapt_alerters(alert, alert_attributes, config)
-        self.adapt_auto_close(alert, alert_attributes, config)
-        self.adapt_recovery_actions(alert, alert_attributes, config)
-        return alert
+        thread_local.alert_id = alert.id
+        thread_local.alerter_name = 'iom_preprocess'
+        try:
+            logger.debug("PREPROCESSING ALERT FOR IOMETRICS")
+            # Ensure eventTags is a dict
+            alert_attributes = NormalizedDictView(alert.attributes)
+            config = kwargs['config']
+            self.adapt_event_tags(alert_attributes)
+            self.adapt_alerters(alert, alert_attributes, config)
+            self.adapt_auto_close(alert, alert_attributes, config)
+            self.adapt_recovery_actions(alert, alert_attributes, config)
+            return alert
+        finally:
+            thread_local.alerter_name = None
 
     def post_receive(self, alert: 'Alert', **kwargs) -> Optional['Alert']:
         return None
