@@ -29,8 +29,7 @@ class Task(AlertTask):
     def before_start_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status, kwargs):
         is_retrying = self.request.retries > 0
         if current_status == AlerterStatus.Recovering:
-            self.logger.info("Ignoring task %s:%s' for alert '%s' -> Alert recovered before alerting",
-                             alerter_name, self.get_operation(), alert.id)
+            self.logger.info("Ignoring task -> Alert recovered before alerting")
             event_retval = not is_retrying, {"info": {"message": "RECOVERED BEFORE ALERTING"}}
             self._ignore_recovery_while_processing(task_id=task_id, alert=alert, alerter_name=alerter_name,
                                                    event_retval=event_retval,
@@ -39,8 +38,8 @@ class Task(AlertTask):
             raise Ignore()
         elif (current_status == AlerterStatus.Processing and not is_retrying) \
                 or current_status not in (AlerterStatus.New, AlerterStatus.Scheduled, AlerterStatus.Processing):
-            self.logger.warning("Ignoring task %s:%s' for alert '%s' -> Current status is not valid for this task: %s",
-                                alerter_name, self.get_operation(), alert.id, current_status.value)
+            self.logger.warning("Ignoring task -> Current status is not valid for this task: %s",
+                                current_status.value)
             self._time_management.pop(task_id, None)
             self.update_state(state=states.IGNORED)
             raise Ignore()
@@ -48,8 +47,7 @@ class Task(AlertTask):
 
     def on_success_operation(self, alert, alerter_attr_data, current_status, kwargs):
         if current_status == AlerterStatus.Recovering:
-            self.logger.info("Alert %s recovered during processing. Sending recovery from processing task",
-                             alert.id)
+            self.logger.info("Alert recovered during processing. Sending recovery from processing task")
             task_data = alerter_attr_data.pop(AProcC.FIELD_TEMP_RECOVERY_DATA, {})
             reason = task_data.get(AProcC.FIELD_TEMP_RECOVERY_DATA_TEXT, alert.text)
             task_def = task_data.get(AProcC.FIELD_TEMP_RECOVERY_DATA_TASK_DEF, {})
@@ -65,7 +63,7 @@ class Task(AlertTask):
                              current_status, retval, kwargs):
         if current_status == AlerterStatus.Recovering:
             # Recovered while processing. Ignoring recovery
-            self.logger.info("Alert %s recovered and processing failed. Ignoring recovery", alert.id)
+            self.logger.info("Alert recovered and processing failed. Ignoring recovery")
             self._ignore_recovery_while_processing(task_id=task_id, alert=alert, alerter_name=alerter_name,
                                                    event_retval=retval,
                                                    recovery_message="RECOVERED BEFORE ALERTING. ALERTING FAILED")
@@ -77,8 +75,7 @@ class Task(AlertTask):
             include_traceback = self.request.properties.get('include_traceback', False)
             event_retval = False, result_for_exception(exc, einfo, include_traceback=include_traceback)
             # Recovered while processing. Cancel retries and ignoring recovery
-            self.logger.info("Alert %s recovered before launching a processing retry. Cancelling retry and recovery",
-                             alert.id)
+            self.logger.info("Alert recovered before launching a processing retry. Cancelling retry and recovery")
             self._ignore_recovery_while_processing(task_id=task_id, alert=alert, alerter_name=alerter_name,
                                                    event_retval=event_retval,
                                                    recovery_message="RECOVERED BEFORE ALERTING DURING RETRY")

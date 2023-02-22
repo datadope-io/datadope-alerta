@@ -7,7 +7,7 @@ from iometrics_alerta.plugins import getLogger, VarDefinition
 from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
 from .emailer import send_email, simple_email_address_validation
-from ... import ConfigKeyDict
+from ... import NormalizedDictView
 
 CONFIG_KEY_SERVER = 'server'
 CONFIG_KEY_SERVER_HOST = 'host'
@@ -47,7 +47,7 @@ class EMailAlerter(Alerter):
     def __init__(self, name, bgtask=None):
         super().__init__(name, bgtask)
         for k, v in self.config.items():
-            if ConfigKeyDict.key_transform(k) in ('server', 'tasksdefinition') \
+            if NormalizedDictView.key_transform(k) in ('server', 'tasksdefinition') \
                     and isinstance(v, str):
                 self.config[k] = json.loads(v)
 

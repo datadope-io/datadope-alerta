@@ -25,15 +25,14 @@ class Task(AlertTask):
 
     def before_start_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status, kwargs):
         if current_status == AlerterStatus.Recovering:
-            self.logger.info("Ignoring repeat task %s:%s' for alert '%s' -> Alert recovered before repeating. "
-                             "Recovering", alerter_name, self.get_operation(), alert.id)
+            self.logger.info("Ignoring repeat task -> Alert recovered before repeating. Recovering")
             self._time_management.pop(task_id, None)
             self._schedule_recovery_task(alert, alerter_attr_data, kwargs)
             self.update_state(state=states.IGNORED)
             raise Ignore()
         elif current_status != AlerterStatus.Repeating:
-            self.logger.warning("Ignoring task %s:%s' for alert '%s' -> Current status is not valid for this task: %s",
-                                alerter_name, self.get_operation(), alert.id, current_status.value)
+            self.logger.warning("Ignoring repeat task -> Current status is not valid for this task: %s",
+                                current_status.value)
             self._time_management.pop(task_id, None)
             self.update_state(state=states.IGNORED)
             raise Ignore()

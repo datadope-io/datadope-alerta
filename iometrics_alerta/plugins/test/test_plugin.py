@@ -13,7 +13,8 @@ logger = getLogger(__name__)
 class TestAlerter(Alerter):
     invocation = 0
 
-    def get_default_configuration(self) -> dict:
+    @classmethod
+    def get_default_configuration(cls) -> dict:
         return {}
 
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:

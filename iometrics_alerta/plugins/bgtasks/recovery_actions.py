@@ -13,7 +13,7 @@ from celery import signature
 
 from alerta.models.enums import Status
 
-from iometrics_alerta import DateTime, RecoveryActionsFields
+from iometrics_alerta import DateTime, RecoveryActionsFields, thread_local
 from iometrics_alerta import GlobalAttributes, RecoveryActionsDataFields, RecoveryActionsStatus
 from iometrics_alerta.plugins import RetryableException, result_for_exception
 from . import app, celery, getLogger, Alert
@@ -42,11 +42,11 @@ def get_alerter_plugins_objects(alerter_plugins: Dict[str, str]) -> dict:
 
 def launch_alerters(alert, recovery_actions_config, alerter_plugins: Dict[str, str]):
     if alert.status in (Status.Closed, Status.Expired):
-        logger.info("[Alert '%s']: Cancelling launching alerters on a closed or expired alert", alert.id)
+        logger.info("Cancelling launching alerters on a closed or expired alert")
         return
     alerter_plugins_objs = get_alerter_plugins_objects(alerter_plugins)
     alerters = recovery_actions_config[RecoveryActionsFields.ALERTERS.var_name]
-    logger.info("[Alert '%s']: Launching alerting to alerters: '%s'", alert.id, ', '.join(alerters))
+    logger.info("Launching alerting to alerters: '%s'", ', '.join(alerters))
     alert = do_alert(alert, alerters, app.config, alerter_plugins_objs)
     alert.update_attributes(alert.attributes)
 
@@ -55,7 +55,7 @@ def do_alert(alert, alerters, config, alerter_plugins: dict, repeating=False) ->
     attributes_to_update = {}
     for alerter in alerters:
         if alerter not in alerter_plugins:
-            logger.error("[Alert '%s']: Unregistered alerter plugin '%s'", alert.id, alerter)
+            logger.error("Unregistered alerter plugin '%s'", alerter)
             continue
         plugin = alerter_plugins[alerter]
         updated = None
@@ -70,7 +70,7 @@ def do_alert(alert, alerters, config, alerter_plugins: dict, repeating=False) ->
                 raise Exception(f"[Alert '{alert.id}']: Error while running post-receive plugin '{plugin.name}':"
                                 f" {str(e)}")
             else:
-                logger.error(f"[Alert '{alert.id}']: Error while running post-receive plugin '{plugin.name}':"
+                logger.error(f"Error while running post-receive plugin '{plugin.name}':"
                              f" {str(e)}")
         if updated:
             alert = updated
@@ -84,12 +84,15 @@ def do_alert(alert, alerters, config, alerter_plugins: dict, repeating=False) ->
 @celery.task(base=celery.Task, bind=True, ignore_result=True)
 def launch_actions(self, alert_id: str, provider_name, provider_class: str, alerter_plugins: Dict[str, str],
                    operation_id=None):
+    thread_local.alert_id = alert_id
+    thread_local.alerter_name = provider_name
+    thread_local.operation = 'recovery_actions'
     begin = datetime.now()
     alert = Alert.find_by_id(alert_id)
     if alert.status in (Status.Closed, Status.Expired):
-        logger.info("[Alert '%s']: Cancelling execution of recovery actions on a closed or expired alert", alert.id)
+        logger.info("Cancelling execution of recovery actions on a closed or expired alert")
         return
-    logger.info("[Alert '%s']: Executing recovery actions", alert.id)
+    logger.info("Executing recovery actions")
     recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
     recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
     current_retries = recovery_actions_data.get(RecoveryActionsDataFields.FIELD_RETRIES)
@@ -146,9 +149,9 @@ def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict
     queue = recovery_actions_config[RecoveryActionsFields.TASK_QUEUE.var_name]
     countdown = get_job_retry_delay(recovery_actions_config)
     if consumed_retries < max_retries:
-        logger.warning("[Alert '%s']: Job' %s' for recovery actions failed: %s."
+        logger.warning("Job' %s' for recovery actions failed: %s."
                        " Scheduled job retry %d/%d in %.1f seconds",
-                       alert.id, operation_id, response.response_data, consumed_retries+1, max_retries, countdown)
+                       operation_id, response.response_data, consumed_retries+1, max_retries, countdown)
         kwargs = {
             'alert_id': alert.id,
             'provider_name': provider_name,
@@ -161,7 +164,7 @@ def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict
             retry_spec={'max_retries': max_retries})
         recovery_actions_data[RecoveryActionsDataFields.FIELD_BG_TASK_ID] = task.id
     else:
-        logger.warning("[Alert '%s']: Error executing recovery actions. No more retries", alert.id)
+        logger.warning("Error executing recovery actions. No more retries")
         finish_launching_alerters(alert, response, recovery_actions_config, recovery_actions_data, alerter_plugins,
                                   begin=None, retries=max_retries)
 
@@ -169,12 +172,14 @@ def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict
 @celery.task(base=celery.Task, bind=True, ignore_result=True)
 def request_async_status(self, alert_id: str, provider_name, provider_class: str, alerter_plugins: Dict[str, str],
                          operation_id):
+    thread_local.alert_id = alert_id
+    thread_local.alerter_name = provider_name
+    thread_local.operation = 'recovery_actions'
     alert = Alert.find_by_id(alert_id)
     if alert.status in (Status.Closed, Status.Expired):
-        logger.info("[Alert '%s']: Cancelling requesting recovery operation status on a closed or expired alert",
-                    alert.id)
+        logger.info("Cancelling requesting recovery operation status on a closed or expired alert")
         return
-    logger.info("[Alert '%s']: Requesting recovery actions execution status for operation '%s'", alert.id, operation_id)
+    logger.info("Requesting recovery actions execution status for operation '%s'", operation_id)
     recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
     recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
     try:
@@ -192,15 +197,15 @@ def request_async_status(self, alert_id: str, provider_name, provider_class: str
         max_retries = retry_spec['max_retries']
         if self.request.retries < max_retries:
             countdown = recovery_actions_config[RecoveryActionsFields.STATUS_REQUEST_INTERVAL.var_name]
-            logger.info("[Alert '%s']: %s. Scheduled retry %d/%d in %.1f seconds",
-                        alert.id, e, self.request.retries + 1, max_retries, countdown)
+            logger.info("%s. Scheduled retry %d/%d in %.1f seconds",
+                        e, self.request.retries + 1, max_retries, countdown)
             self.retry(exc=e, countdown=countdown, max_retries=max_retries, retry_spec=retry_spec)
         else:
-            logger.warning("[Alert '%s']: Error executing recovery actions: %s in time", alert.id, e)
+            logger.warning("Error executing recovery actions: %s in time", e)
             finish_launching_alerters(alert, e, recovery_actions_config,
                                       recovery_actions_data, alerter_plugins)
     except Exception as e:
-        logger.warning("[Alert '%s']: Error executing recovery actions: %s", alert.id, e)
+        logger.warning("Error executing recovery actions: %s", e)
         finish_launching_alerters(alert, e, recovery_actions_config,
                                   recovery_actions_data, alerter_plugins)
     finally:
@@ -212,9 +217,8 @@ def wait_for_response(alert: Alert, provider_name: str, provider_class: str, ale
     timeout_for_response = recovery_actions_config[RecoveryActionsFields.TIMEOUT_FOR_RESPONSE.var_name]
     status_request_interval = recovery_actions_config[RecoveryActionsFields.STATUS_REQUEST_INTERVAL.var_name]
     retries = floor(timeout_for_response / status_request_interval)
-    logger.info("[Alert: '%s']: Recovery actions not finished. Requesting status every %.0f seconds."
-                " Timeout after %d retries",
-                alert.id, status_request_interval, retries)
+    logger.info("Recovery actions not finished. Requesting status every %.0f seconds."
+                " Timeout after %d retries", status_request_interval, retries)
     properties = {
         'countdown': status_request_interval,
         'queue': recovery_actions_config[RecoveryActionsFields.STATUS_QUEUE.var_name],
@@ -238,8 +242,7 @@ def wait_for_recovery(alert: Alert, recovery_actions_config, recovery_actions_da
     timeout = recovery_actions_config[RecoveryActionsFields.TIMEOUT_FOR_RESOLUTION.var_name]
     eta = finish_time + timedelta(seconds=timeout)
     diff = DateTime.diff_seconds_utc(eta, datetime.now())
-    logger.info("[Alert: '%s']: Recovery actions sent successfully. Waiting %.0f seconds for recovery",
-                alert.id, diff)
+    logger.info("Recovery actions sent successfully. Waiting %.0f seconds for recovery", diff)
     properties = {
         'eta': eta,
         'queue': recovery_actions_config[RecoveryActionsFields.WAIT_QUEUE.var_name],
@@ -262,10 +265,12 @@ def wait_for_recovery(alert: Alert, recovery_actions_config, recovery_actions_da
 
 @celery.task(ignore_result=True, max_retries=0)
 def fail_not_resolved(alert_id: str, alerter_plugins: Dict[str, str]):
+    thread_local.alert_id = alert_id
+    thread_local.operation = 'recovery_actions'
     # If here, alert is not closed. But check anyway
     alert = Alert.find_by_id(alert_id)
     if alert.status not in (Status.Closed, Status.Expired):
-        logger.info("[Alert '%s']: Alert not recovered in time after recovery actions", alert.id)
+        logger.info("Alert not recovered in time after recovery actions")
         recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
         recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
         finish_launching_alerters(alert, Exception("Alert not resolved in time after recovery actions"),
@@ -286,11 +291,11 @@ def retry_or_finish(task, alert, exc: Exception,
     max_retries = retry_spec['max_retries']
     if not no_retries and task.request.retries < max_retries:
         countdown = get_job_retry_delay(recovery_actions_config)
-        logger.warning("[Alert '%s']: Error executing recovery actions: %s. Scheduled Retry %d/%d in %.1f seconds",
-                       alert.id, exc, task.request.retries + 1, max_retries, countdown)
+        logger.warning("Error executing recovery actions: %s. Scheduled Retry %d/%d in %.1f seconds",
+                       exc, task.request.retries + 1, max_retries, countdown)
         task.retry(exc=exc, countdown=countdown, max_retries=max_retries, retry_spec=retry_spec)
     else:
-        logger.warning("[Alert '%s']: Error executing recovery actions: %s%s", alert.id,
+        logger.warning("Error executing recovery actions: %s%s",
                        exc, "" if no_retries else ". No more retries")
         finish_launching_alerters(alert, exc, recovery_actions_config, recovery_actions_data, alerter_plugins, begin,
                                   task.request.retries)

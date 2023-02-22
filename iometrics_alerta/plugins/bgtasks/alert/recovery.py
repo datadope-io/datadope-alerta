@@ -14,8 +14,7 @@ class Task(AlertTask):
 
     def before_start_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status, kwargs):
         if current_status != AlerterStatus.Recovering:
-            self.logger.warning("Ignoring task %s:%s' for alert '%s' -> Current status is not valid for this task: %s",
-                                alerter_name, self.get_operation(), alert.id, current_status.value)
+            self.logger.warning("Ignoring task -> Current status is not valid for this task: %s", current_status.value)
             self._time_management.pop(task_id, None)
             self.update_state(state=states.IGNORED)
             raise Ignore()
