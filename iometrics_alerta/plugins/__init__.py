@@ -152,7 +152,7 @@ class Alerter(ABC):
         """
         Helper method to return alerter specific data received as an alert attribute.
 
-        Alerter specif data atttrinute name is formed as <alerter_name><ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX>,
+        Alerter specif data atttribute name is formed as <alerter_name><ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX>,
         and is searched in alert attributes using normalized keys.
         ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX is '_CONFIG' by default.
         So for an alerter with name "email" the expected attribute name would be email_CONFIG.
@@ -188,6 +188,21 @@ class Alerter(ABC):
         tags = Alerter.get_event_tags(alert, operation)
         return safe_convert(tags.get(tag, default), type_=type_, operation=operation)
 
+    @property
+    def alert_attribute_name(self):
+        return AlerterProcessAttributeConstant.ATTRIBUTE_FORMATTER.format(alerter_name=self.name)
+
+    def get_operation_result_data(self, alert, operation) -> dict:
+        """
+        Returns the stored result of an operation of the alerter on the provided alert.
+
+        :param alert:
+        :param operation:
+        :return:
+        """
+        return alert.attributes.get(self.alert_attribute_name, {}) \
+            .get(ATTRIBUTE_KEYS_BY_OPERATION[operation], {})
+
     def render_template(self, template_path, alert, operation=None):
         """
         Helper method for alerters to render a file formatted as Jinja2 template.
@@ -218,7 +233,7 @@ class Alerter(ABC):
                                operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
                                pretty_alert=alert_pretty_json_string(alert))
 
-    def render_value(self, value, alert, operation=None):
+    def render_value(self, value, alert, operation=None, **kwargs):
         """
         Helper method for alerters to render a file formatted as Jinja2 template.
 
@@ -234,6 +249,7 @@ class Alerter(ABC):
         :param value:
         :param alert:
         :param operation:
+        :param kwargs: extra key-value parameters to pass for rendering vars resolution
         :return:
         """
         attributes = NormalizedDictView(alert.attributes)
@@ -246,7 +262,8 @@ class Alerter(ABC):
                             alerter_name=self.name,
                             operation=operation,
                             operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
-                            pretty_alert=alert_pretty_json_string(alert))
+                            pretty_alert=alert_pretty_json_string(alert),
+                            **kwargs)
 
     @abstractmethod
     def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
