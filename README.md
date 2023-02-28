@@ -1,5 +1,8 @@
 # iometrics-alerta
 
+**WARNING**: This is a WIP version of the project. It is under construction so important modifications
+may (and will) be done before releasing first version.
+
 ## Backend: iometrics-alerta-backend-flexiblededup
 
 Backend to connect to POSTGRESQL database that implements a special deduplication mechanism.
