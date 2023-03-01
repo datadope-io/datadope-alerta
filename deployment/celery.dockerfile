@@ -5,28 +5,31 @@ ARG TARGETPLATFORM
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
 
-WORKDIR /app
-
-COPY VERSION LICENSE README.md setup*.py /app/
-COPY deployment/Pipfile /app/
-COPY backend /app/backend/
-COPY iometrics_alerta /app/iometrics_alerta
-
 # Install dependencies
 RUN apt-get -y update \
     && apt-get -y install build-essential git libpq-dev
 
 # Install pipenv
 RUN pip install --upgrade pip \
-    && pip install pipenv \
-    && python -m setup_routing bdist_wheel \
-    && python -m setup bdist_wheel
+    && pip install pipenv
 
+WORKDIR /app
+
+# Install python dependencies
+COPY deployment/Pipfile /app/
 RUN pipenv lock \
     && pipenv install --system
 
-WORKDIR /
+# Create packages for iometrics-alerta
+COPY VERSION LICENSE README.md setup*.py /app/
+COPY backend /app/backend/
+COPY iometrics_alerta /app/iometrics_alerta
 
+RUN python -m setup_routing bdist_wheel \
+    && python -m setup bdist_wheel
+
+# Install iometrics-alerta
+WORKDIR /
 RUN pip install /app/dist/alerta_routing-1.0.0-py3-none-any.whl \
     && pip install /app/dist/iometrics_alerta-1.0.0-py3-none-any.whl
 

@@ -1,6 +1,6 @@
 import json
 import logging
-import threading
+import os
 from datetime import datetime, date
 from enum import Enum
 
@@ -9,6 +9,7 @@ import pytz
 from flask import current_app, render_template_string  # noqa
 
 from alerta.app import alarm_model
+from alerta.database.backends.flexiblededup.alerters import AlertersBackend
 from alerta.database.backends.postgres import Backend as PGBackend, Record, register_adapter, Json
 from alerta.models.enums import Status, Severity
 from alerta.utils.format import DateTime
@@ -20,18 +21,6 @@ ATTRIBUTE_ORIGINAL_VALUE = 'tempOriginalValue'  # temp attribute => not stored
 
 CONFIG_DEFAULT_DEDUPLICATION_TYPE = 'DEFAULT_DEDUPLICATION_TYPE'
 CONFIG_DEFAULT_DEDUPLICATION_TEMPLATE = 'DEFAULT_DEDUPLICATION_TEMPLATE'
-
-# index env_res_evt_cust_key must be created to ensure original alerta index is not created as could not be
-# created because of duplication for the original index
-DB_SCHEMA_MODIFICATION = """
-    -- CREATE UNIQUE INDEX IF NOT EXISTS iom_env_res_evt_cust_key ON alerts 
-    -- USING btree (environment, resource, event, (COALESCE(customer, ''::text))) 
-    -- WHERE status NOT IN ('closed', 'expired');
-    DROP INDEX IF EXISTS env_res_evt_cust_key;
-    CREATE UNIQUE INDEX IF NOT EXISTS env_res_evt_cust_key ON alerts
-    USING btree (id);
-
-"""
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +48,11 @@ class JsonWithDatetime(Json):
 
 
 class Backend(PGBackend):
+
+    def __init__(self, app=None):
+        self.backend_alerters = None
+        super().__init__(app=app)
+
     @classmethod
     def render_value(cls, value, **kwargs):
         if isinstance(value, dict):
@@ -91,20 +85,16 @@ class Backend(PGBackend):
                     deduplication = None
         return deduplication
 
-    def create_engine(self, app, uri, dbname=None, raise_on_error=True):
+    def create_engine(self, app, uri, dbname=None, raise_on_error=True, db_model=None):
         uri = f"postgresql://{uri.split('://')[1]}"
-        super(Backend, self).create_engine(app, uri, dbname, raise_on_error)
+        if not db_model:
+            schema_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'schema.sql'))
+            if os.path.exists(schema_file):
+                with open(schema_file, 'r') as f:
+                    db_model = f.read()
+        super(Backend, self).create_engine(app, uri, dbname, raise_on_error, db_model)
         register_adapter(dict, JsonWithDatetime)
-        lock = threading.Lock()
-        with lock:
-            conn = self.connect()
-            try:
-                conn.cursor().execute(DB_SCHEMA_MODIFICATION)
-                conn.commit()
-            except Exception as e:
-                if raise_on_error:
-                    raise
-                app.logger.warning(e)
+        self.backend_alerters = AlertersBackend(self)
 
     def create_alert(self, alert):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)

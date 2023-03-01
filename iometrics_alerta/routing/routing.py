@@ -6,7 +6,7 @@ from alerta.models.enums import Status
 
 from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration, \
     RecoveryActionsDataFields
-from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, thread_local
+from iometrics_alerta import thread_local
 from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
 from iometrics_alerta.plugins import AlerterStatus
 from iometrics_alerta.plugins.iom_plugin import IOMAlerterPlugin
@@ -47,6 +47,7 @@ def initialize_plugins(plugins_object, config):
 
 def rules(alert, plugins, config):  # noqa
     thread_local.alert_id = alert.id
+    thread_local.alerter_name = 'routing'
     global _plain_plugins, _alerters_plugins
     if _plain_plugins is None:
         _plain_plugins, _alerters_plugins = initialize_plugins(plugins, config)
@@ -104,9 +105,7 @@ def rules(alert, plugins, config):  # noqa
                     continue
                 alerter_name = getattr(plugins[alerter], 'alerter_name',
                                        plugins[alerter].name.replace('.', '_').replace('$', '_'))
-                alerter_status = AlerterStatus(alert.attributes
-                                               .get(AProcC.ATTRIBUTE_FORMATTER.format(alerter_name=alerter_name), {})
-                                               .get(AProcC.FIELD_STATUS))
+                alerter_status = AlerterStatus.from_db(alert_id=alert.id, alerter_name=alerter_name)
                 if alerter_status in (AlerterStatus.Recovered, AlerterStatus.Recovering):
                     # If alerter has already managed the recovery: ignore
                     logger.info("Alerter %s already sent recovery for '%s'", alerter, alert)

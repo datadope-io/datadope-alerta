@@ -11,7 +11,7 @@ from alerta.utils.collections import merge  # To provide import for package modu
 # noinspection PyUnresolvedReferences
 from alertaclient.api import Client as AlertaClient  # To provide import for package modules
 
-from iometrics_alerta import init_configuration, init_jinja_loader
+from iometrics_alerta import init_configuration, init_jinja_loader, init_alerters_backend
 from iometrics_alerta.plugins import getLogger
 # noinspection PyUnresolvedReferences
 from iometrics_alerta.plugins import prepare_result, result_for_exception
@@ -23,6 +23,7 @@ logger = getLogger('bgtasks')
 
 init_configuration(app.config)
 init_jinja_loader(app)
+init_alerters_backend()
 
 
 def revoke_task(task_id):

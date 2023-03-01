@@ -12,9 +12,10 @@ from celery.utils.log import get_task_logger
 # noinspection PyPackageRequirements
 from jinja2 import TemplateNotFound
 
+from alerta.database.backends.flexiblededup.alerters_model import AlerterOperationData
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
-    NormalizedDictView, render_template, AlerterProcessAttributeConstant, DateTime, \
+    NormalizedDictView, render_template, ALERTERS_KEY_BY_OPERATION, \
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
     AlertIdFilter
 
@@ -55,6 +56,19 @@ class AlerterStatus(str, Enum):
     @classmethod
     def _missing_(cls, value):
         return cls.New
+
+    @classmethod
+    def from_db(cls, alert_id, alerter_name):
+        from iometrics_alerta import db_alerters
+        return AlerterStatus(db_alerters.get_status(alert_id, alerter_name))
+
+    @classmethod
+    def store(cls, alert_id, alerter, status: 'AlerterStatus') -> 'AlerterStatus':
+        from iometrics_alerta import db_alerters
+        record = db_alerters.update_status(alert_id, alerter, status.value)
+        if record is None:
+            record = db_alerters.create_status(alert_id, alerter, status.value)
+        return AlerterStatus(record)
 
 
 class Alerter(ABC):
@@ -152,7 +166,7 @@ class Alerter(ABC):
         """
         Helper method to return alerter specific data received as an alert attribute.
 
-        Alerter specif data atttribute name is formed as <alerter_name><ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX>,
+        Alerter specif data attribute name is formed as <alerter_name><ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX>,
         and is searched in alert attributes using normalized keys.
         ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX is '_CONFIG' by default.
         So for an alerter with name "email" the expected attribute name would be email_CONFIG.
@@ -188,11 +202,7 @@ class Alerter(ABC):
         tags = Alerter.get_event_tags(alert, operation)
         return safe_convert(tags.get(tag, default), type_=type_, operation=operation)
 
-    @property
-    def alert_attribute_name(self):
-        return AlerterProcessAttributeConstant.ATTRIBUTE_FORMATTER.format(alerter_name=self.name)
-
-    def get_operation_result_data(self, alert, operation) -> dict:
+    def get_operation_result_data(self, alert, operation) -> dict | None:
         """
         Returns the stored result of an operation of the alerter on the provided alert.
 
@@ -200,8 +210,12 @@ class Alerter(ABC):
         :param operation:
         :return:
         """
-        return alert.attributes.get(self.alert_attribute_name, {}) \
-            .get(ATTRIBUTE_KEYS_BY_OPERATION[operation], {})
+
+        data = AlerterOperationData.from_db(alert_id=alert.id, alerter=self.name,
+                                            operation=ALERTERS_KEY_BY_OPERATION[operation],
+                                            create_default=None)
+        if data:
+            return data.response
 
     def render_template(self, template_path, alert, operation=None):
         """
@@ -230,7 +244,7 @@ class Alerter(ABC):
                                alerter_config=self.config,
                                alerter_name=self.name,
                                operation=operation,
-                               operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
+                               operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
                                pretty_alert=alert_pretty_json_string(alert))
 
     def render_value(self, value, alert, operation=None, **kwargs):
@@ -261,7 +275,7 @@ class Alerter(ABC):
                             alerter_config=self.config,
                             alerter_name=self.name,
                             operation=operation,
-                            operation_key=ATTRIBUTE_KEYS_BY_OPERATION[operation] if operation else None,
+                            operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
@@ -297,43 +311,25 @@ class Alerter(ABC):
         return dry_run
 
 
-ATTRIBUTE_KEYS_BY_OPERATION = {
-    Alerter.process_event.__name__: AlerterProcessAttributeConstant.KEY_NEW_EVENT,
-    Alerter.process_recovery.__name__: AlerterProcessAttributeConstant.KEY_RECOVERY,
-    Alerter.process_repeat.__name__: AlerterProcessAttributeConstant.KEY_REPEAT
-}
-
-
-def prepare_result(status: AlerterStatus, data_field: str,
+def prepare_result(alerter_operation_data: AlerterOperationData,
                    retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
                    start_time: datetime = None, end_time: datetime = None,
-                   duration: float = None, skipped: bool = None, retries: int = None) -> Tuple[bool, Dict[str, Any]]:
+                   skipped: bool = None, retries: int = None) -> AlerterOperationData:
     if isinstance(retval, tuple):
-        result = {
-            AlerterProcessAttributeConstant.FIELD_SUCCESS: retval[0],
-            AlerterProcessAttributeConstant.FIELD_RESPONSE: retval[1]
-        }
+        success, response = retval
     else:
-        result = {
-            AlerterProcessAttributeConstant.FIELD_SUCCESS: True,
-            AlerterProcessAttributeConstant.FIELD_RESPONSE: retval
-        }
+        success, response = True, retval
+    alerter_operation_data.success = success
+    alerter_operation_data.response = response
     if start_time:
-        result[AlerterProcessAttributeConstant.FIELD_START] = DateTime.iso8601_utc(start_time)
+        alerter_operation_data.start_time = start_time
     if end_time:
-        result[AlerterProcessAttributeConstant.FIELD_END] = DateTime.iso8601_utc(end_time)
-    if duration is None and start_time is not None and end_time is not None:
-        duration = (end_time - start_time).total_seconds()
-    if duration is not None:
-        result[AlerterProcessAttributeConstant.FIELD_ELAPSED] = duration
+        alerter_operation_data.end_time = end_time
     if skipped is not None:
-        result[AlerterProcessAttributeConstant.FIELD_SKIPPED] = skipped
+        alerter_operation_data.skipped = skipped
     if retries:
-        result[AlerterProcessAttributeConstant.FIELD_RETRIES] = retries
-    return result[AlerterProcessAttributeConstant.FIELD_SUCCESS], {
-            AlerterProcessAttributeConstant.FIELD_STATUS: status.value,
-            data_field: result
-    }
+        alerter_operation_data.retries = retries
+    return alerter_operation_data
 
 
 def result_for_exception(exc, einfo=None, include_traceback=False):
@@ -353,10 +349,3 @@ def result_for_exception(exc, einfo=None, include_traceback=False):
         result['info']['traceback'] = ''.join(traceback.format_exception(
             type(exc), exc, exc.__traceback__)) if exc else einfo.traceback
     return result
-
-
-def has_alerting_succeeded(alert, alerter_attribute_name):
-    success = alert.attributes.get(alerter_attribute_name, {}) \
-        .get(AlerterProcessAttributeConstant.KEY_NEW_EVENT, {})\
-        .get(AlerterProcessAttributeConstant.FIELD_SUCCESS, False)
-    return success

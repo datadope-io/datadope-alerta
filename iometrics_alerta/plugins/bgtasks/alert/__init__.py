@@ -8,11 +8,12 @@ from requests.exceptions import ConnectionError as RequestsConnectionError, Time
 # noinspection PyPackageRequirements
 from celery.utils.time import get_exponential_backoff_interval
 
-from iometrics_alerta import AlerterProcessAttributeConstant as AProcC, DateTime, thread_local
+from alerta.database.backends.flexiblededup.alerters_model import AlerterOperationData
+from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
-from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException, ATTRIBUTE_KEYS_BY_OPERATION
+from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException
 
-from .. import app, celery, getLogger, merge, Alert, prepare_result, result_for_exception
+from .. import app, celery, getLogger, Alert, prepare_result, result_for_exception
 # noinspection PyUnresolvedReferences
 from .. import revoke_task  # To provide import to package modules
 
@@ -31,29 +32,32 @@ class AlertTask(celery.Task, ABC):
     def get_operation() -> str:
         pass
 
+    @classmethod
+    def get_operation_key(cls) -> str:
+        return ALERTERS_KEY_BY_OPERATION[cls.get_operation()]
+
     @abstractmethod
-    def before_start_operation(self, task_id, alert, alerter_name, alerter_attr_data,
+    def before_start_operation(self, task_id, alerter_operation_data: AlerterOperationData,
                                current_status, kwargs) -> AlerterStatus:
         pass
 
     @abstractmethod
-    def on_success_operation(self, alert, alerter_attr_data, current_status, kwargs) -> AlerterStatus:
+    def on_success_operation(self, alerter_operation_data: AlerterOperationData,
+                             current_status, kwargs) -> AlerterStatus:
         pass
 
     @abstractmethod
-    def on_failure_operation(self, task_id, alert, alerter_name, alerter_attr_data,
+    def on_failure_operation(self, task_id, alerter_operation_data: AlerterOperationData,
                              current_status, retval, kwargs) -> Optional[AlerterStatus]:
         pass
 
     @abstractmethod
-    def on_retry_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status,
-                           exc, einfo, kwargs) -> bool:
+    def on_retry_operation(self, task_id, alerter_operation_data: AlerterOperationData,
+                           current_status, exc, einfo, kwargs) -> bool:
         """
 
         :param task_id:
-        :param alert:
-        :param alerter_name:
-        :param alerter_attr_data:
+        :param alerter_operation_data:
         :param current_status:
         :param exc:
         :param einfo:
@@ -99,14 +103,6 @@ class AlertTask(celery.Task, ABC):
         alerter_class = alerter_data[BGTadC.CLASS]
         return Alerter.get_alerter_type(alerter_class)(alerter_name, task)
 
-    @staticmethod
-    def _get_attribute_name(alerter_name):
-        return AProcC.ATTRIBUTE_FORMATTER.format(alerter_name=alerter_name)
-
-    @classmethod
-    def get_data_field(cls):
-        return ATTRIBUTE_KEYS_BY_OPERATION[cls.get_operation()]
-
     @classmethod
     def _get_parameters(cls, kwargs):  # task_id null for intermediate requests => begin time is not popped
         alerter_data = kwargs['alerter_data']
@@ -114,7 +110,7 @@ class AlertTask(celery.Task, ABC):
         alerter_name = alerter_data[BGTadC.NAME]
         alert_id = alert['id']
         operation = cls.get_operation()
-        return alert_id, alerter_name, operation
+        return alert_id, alerter_name, operation, ALERTERS_KEY_BY_OPERATION[operation]
 
     @classmethod
     def _get_timing_from_now(cls, task_id):
@@ -124,7 +120,7 @@ class AlertTask(celery.Task, ABC):
         :param task_id:
         :return:
         """
-        now = datetime.now()
+        now = datetime.utcnow()
         duration = 0.0
         begin = cls._time_management.get(task_id, None)
         if begin:
@@ -132,82 +128,70 @@ class AlertTask(celery.Task, ABC):
         return begin, now, duration
 
     @classmethod
-    def _prepare_result(cls, status: AlerterStatus, retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
-                        start_time: datetime = None, end_time: datetime = None, duration: float = None,
-                        skipped: bool = None, retries: int = None) -> Tuple[bool, Dict[str, Any]]:
-        return prepare_result(status, cls.get_data_field(), retval, start_time, end_time, duration,
+    def _prepare_result(cls, alerter_operation_data, retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
+                        start_time: datetime = None, end_time: datetime = None,
+                        skipped: bool = None, retries: int = None):
+        return prepare_result(alerter_operation_data, retval, start_time, end_time,
                               skipped, retries)
 
     @classmethod
-    def _update_alerter_attribute(cls, alert, alerter_name, attribute_data, update_db=True,
-                                  remove_temp_recovery_data_attr=False):
-        attribute_name = cls._get_attribute_name(alerter_name)
-        alerter_attr_data = alert.attributes.setdefault(attribute_name, {})
-        merge(alerter_attr_data, attribute_data)
-        if remove_temp_recovery_data_attr:
-            alerter_attr_data.pop(AProcC.FIELD_TEMP_RECOVERY_DATA, None)
-        if update_db:
-            alert.update_attributes({attribute_name: alerter_attr_data})
+    def _update_alerter_db_info(cls, status: AlerterStatus,
+                                alerter_operation_data: AlerterOperationData):
+        alerter_operation_data.task_chain_info = None
+        AlerterStatus.store(alerter_operation_data.alert_id, alerter_operation_data.alerter, status=status)
+        alerter_operation_data.store()
 
-    def _finish_task(self, alert, alerter_name, status, retval, start_time, end_time, duration, update_db=True):
-        attribute_name = self._get_attribute_name(alerter_name)
+    def _finish_task(self, alerter_operation_data: AlerterOperationData, status, retval, start_time,
+                     end_time):
         if start_time is None:
-            key = self.get_data_field()
-            start_time = alert.attributes.get(attribute_name, {}).get(key, {}).get(AProcC.FIELD_START)
-            if start_time:
-                try:
-                    start_time = DateTime.parse_utc(start_time)
-                except ValueError:
-                    start_time = None
-        if (duration is None or duration == 0.0) and start_time is not None and end_time is not None:
+            start_time = alerter_operation_data.start_time
+        if start_time is not None and end_time is not None:
             duration = DateTime.diff_seconds_utc(end_time, start_time)
-        success, attribute_data = self._prepare_result(status=status, retval=retval, start_time=start_time,
-                                                       end_time=end_time, duration=duration,
-                                                       retries=self.request.retries)
+        else:
+            duration = 0.0
+        alerter_operation_data = self._prepare_result(alerter_operation_data=alerter_operation_data, retval=retval,
+                                                      start_time=start_time, end_time=end_time,
+                                                      retries=self.request.retries)
         self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s -> %s",
-                         duration, 'SUCCESS' if success else 'FAILURE', retval)
-        self._update_alerter_attribute(alert, alerter_name, attribute_data, update_db)
+                         duration, 'SUCCESS' if alerter_operation_data.success else 'FAILURE', retval)
+        self._update_alerter_db_info(status, alerter_operation_data)
 
 
     def before_start(self, task_id, args, kwargs):  # noqa
-        start_time = datetime.now()
-        alert_id, alerter_name, operation = self._get_parameters(kwargs)
+        start_time = datetime.utcnow()
+        alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
         thread_local.alert_id = alert_id
         thread_local.alerter_name = alerter_name
-        thread_local.operation = ATTRIBUTE_KEYS_BY_OPERATION[operation]
+        thread_local.operation = operation_key
         is_retrying = self.request.retries > 0
         if is_retrying:
             self.logger.info("Retry %d", self.request.retries)
         else:
             self._time_management[task_id] = start_time
             self.logger.info("Starting task")
-        attribute_name = self._get_attribute_name(alerter_name)
         with app.app_context():
-            alert_obj = Alert.find_by_id(alert_id)
-            alerter_attr_data = alert_obj.attributes.setdefault(attribute_name, {})
-            current_status = AlerterStatus(alerter_attr_data.get(AProcC.FIELD_STATUS))
-            new_status = self.before_start_operation(task_id, alert_obj, alerter_name, alerter_attr_data,
+            current_status = AlerterStatus.from_db(alert_id, alerter_name)
+            alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, operation_key)
+            new_status = self.before_start_operation(task_id, alerter_operation_data,
                                                      current_status, kwargs)
             if is_retrying:
-                alerter_attr_data.setdefault(self.get_data_field(), {})[AProcC.FIELD_RETRIES] = self.request.retries
+                alerter_operation_data.retries = self.request.retries
             else:
-                alerter_attr_data[AProcC.FIELD_STATUS] = new_status.value
-                alerter_attr_data.setdefault(self.get_data_field(), {})[AProcC.FIELD_START] = DateTime.iso8601_utc(
-                    start_time)
-            alert_obj.update_attributes({attribute_name: alerter_attr_data})
+                alerter_operation_data.start_time = start_time
+            AlerterStatus.store(alert_id, alerter_name, new_status)
+            AlerterStatus.store(alert_id, alerter_name, new_status)
+            alerter_operation_data.store()
 
     def on_success(self, retval, task_id, args, kwargs):  # noqa
         try:
-            alert_id, alerter_name, operation = self._get_parameters(kwargs)
+            alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
             start_time, end_time, duration = self._get_timing_from_now(task_id)
-            attribute_name = self._get_attribute_name(alerter_name)
             with app.app_context():
-                alert_obj = Alert.find_by_id(alert_id)
-                alerter_attr_data = alert_obj.attributes.setdefault(attribute_name, {})
-                current_status = AlerterStatus(alerter_attr_data[AProcC.FIELD_STATUS])
-                next_status = self.on_success_operation(alert_obj, alerter_attr_data, current_status, kwargs)
-                self._finish_task(alert=alert_obj, alerter_name=alerter_name, status=next_status, retval=retval,
-                                  start_time=start_time, end_time=end_time, duration=duration)
+                current_status = AlerterStatus.from_db(alert_id, alerter_name)
+                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+                next_status = self.on_success_operation(alerter_operation_data, current_status, kwargs)
+                self._finish_task(alerter_operation_data=alerter_operation_data, status=next_status, retval=retval,
+                                  start_time=start_time, end_time=end_time)
         finally:
             self._time_management.pop(task_id, None)
 
@@ -215,31 +199,25 @@ class AlertTask(celery.Task, ABC):
         try:
             include_traceback = self.request.properties.get('include_traceback', False)
             retval = False, result_for_exception(exc, einfo, include_traceback=include_traceback)
-            alert_id, alerter_name, operation = self._get_parameters(kwargs)
+            alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
             start_time, end_time, duration = self._get_timing_from_now(task_id)
-            attribute_name = self._get_attribute_name(alerter_name)
             with app.app_context():
-                alert_obj = Alert.find_by_id(alert_id)
-                alerter_attr_data = alert_obj.attributes.setdefault(attribute_name, {})
-                current_status = AlerterStatus(alerter_attr_data[AProcC.FIELD_STATUS])
-                next_status = self.on_failure_operation(task_id=task_id, alert=alert_obj, alerter_name=alerter_name,
-                                                        alerter_attr_data=alerter_attr_data,
+                current_status = AlerterStatus.from_db(alert_id, alerter_name)
+                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+                next_status = self.on_failure_operation(task_id=task_id, alerter_operation_data=alerter_operation_data,
                                                         current_status=current_status, retval=retval, kwargs=kwargs)
                 if next_status:
-                    self._finish_task(alert=alert_obj, alerter_name=alerter_name, status=next_status, retval=retval,
-                                      start_time=start_time, end_time=end_time, duration=duration)
+                    self._finish_task(alerter_operation_data=alerter_operation_data, status=next_status, retval=retval,
+                                      start_time=start_time, end_time=end_time)
         finally:
             self._time_management.pop(task_id, None)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):  # noqa
-        alert_id, alerter_name, operation = self._get_parameters(kwargs)
-        attribute_name = self._get_attribute_name(alerter_name)
+        alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
         with app.app_context():
-            alert_obj = Alert.find_by_id(alert_id)
-            alerter_attr_data = alert_obj.attributes.setdefault(attribute_name, {})
-            current_status = AlerterStatus(alerter_attr_data[AProcC.FIELD_STATUS])
-            should_retry = self.on_retry_operation(task_id=task_id, alert=alert_obj, alerter_name=alerter_name,
-                                                   alerter_attr_data=alerter_attr_data,
+            current_status = AlerterStatus.from_db(alert_id, alerter_name)
+            alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+            should_retry = self.on_retry_operation(task_id=task_id, alerter_operation_data=alerter_operation_data,
                                                    current_status=current_status,
                                                    exc=exc, einfo=einfo, kwargs=kwargs)
         if should_retry:

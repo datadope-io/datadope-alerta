@@ -12,7 +12,7 @@ class Task(AlertTask):
     def get_operation():
         return Alerter.process_recovery.__name__
 
-    def before_start_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status, kwargs):
+    def before_start_operation(self, task_id, alerter_operation_data, current_status, kwargs):
         if current_status != AlerterStatus.Recovering:
             self.logger.warning("Ignoring task -> Current status is not valid for this task: %s", current_status.value)
             self._time_management.pop(task_id, None)
@@ -20,12 +20,11 @@ class Task(AlertTask):
             raise Ignore()
         return AlerterStatus.Recovering
 
-    def on_success_operation(self, alert, alerter_attr_data, current_status, kwargs):
+    def on_success_operation(self, alerter_operation_data, current_status, kwargs):
         return AlerterStatus.Recovered
 
-    def on_failure_operation(self, task_id, alert, alerter_name, alerter_attr_data,
-                             current_status, retval, kwargs):
+    def on_failure_operation(self, task_id, alerter_operation_data, current_status, retval, kwargs):
         return AlerterStatus.Recovered
 
-    def on_retry_operation(self, task_id, alert, alerter_name, alerter_attr_data, current_status, exc, einfo, kwargs):
+    def on_retry_operation(self, task_id, alerter_operation_data, current_status, exc, einfo, kwargs):
         return True

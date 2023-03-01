@@ -33,7 +33,8 @@ setup(
     # ] + ['iometrics_alerta.' + x for x in find_packages(exclude=['routing'])],
     packages=['alerta.database.backends.flexiblededup'] + find_packages(exclude=['iometrics_alerta.routing']),
     install_requires=[
-        'alerta-server[postgres]~=8.7.0',
+        # TODO: Remove branch when merged to master
+        'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git@feature/iometrics',
         'requests',
         'celery[redis]~=5.2.7'
     ],
