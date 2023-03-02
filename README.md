@@ -1,5 +1,8 @@
 # iometrics-alerta
 
+**WARNING**: This is a WIP version of the project. It is under construction so important modifications
+may (and will) be done before releasing first version.
+
 ## Backend: iometrics-alerta-backend-flexiblededup
 
 Backend to connect to POSTGRESQL database that implements a special deduplication mechanism.
@@ -158,7 +161,7 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-"alerta-server[postgres]" = "==8.7.0"  # master version has some patches so it may be better to use git repo
+alerta-server = {extras=["postgres"], git = "https://github.com/datadope-io/alerta.git", ref = "feature/iometrics"}
 "celery[redis]" = "==5.2.7"
 alerta = "==8.5.1"  # Client. Needed for periodic background tasks
 python-dotenv = "*"
@@ -418,7 +421,7 @@ To create the images:
 
 ```shell
 docker build -f deployment/alerta.dockerfile -t iometrics-alerta-server .
-docker build -f deployment/celert.dockerfile -t iometrics-alerta-celery .
+docker build -f deployment/celery.dockerfile -t iometrics-alerta-celery .
 docker build -f deployment/webui.dockerfile -t iometrics-alerta-webui .
 ```
 

@@ -21,6 +21,8 @@ from alerta.utils.format import CustomJSONEncoder as AlertaCustomJSONEncoder
 
 thread_local = threading.local()
 
+db_alerters = None
+
 logger = logging.getLogger('iometrics_alerta')
 
 CONFIG_PLUGINS = 'PLUGINS'
@@ -55,7 +57,7 @@ Name of the alerter to configure in alerters attribute to indicate that the aler
 no alerter should be notified. It is the same of an empty array in that attribute.
 """
 
-ALERTERS_TASK_BY_OPERATION = {
+ALERTERS_KEY_BY_OPERATION = {
     'process_event': 'new',
     'process_recovery': 'recovery',
     'process_repeat': 'repeat'
@@ -95,10 +97,10 @@ def alert_pretty_json_string(alert: Alert):
 
 
 def get_task_name(operation):
-    if operation not in ALERTERS_TASK_BY_OPERATION:
+    if operation not in ALERTERS_KEY_BY_OPERATION:
         logger.warning("Operation '%s' not configured. Using 'new'", operation)
         return 'new'
-    return ALERTERS_TASK_BY_OPERATION[operation]
+    return ALERTERS_KEY_BY_OPERATION[operation]
 
 
 def render_value(value, **kwargs):
@@ -148,49 +150,49 @@ class AlertIdFilter(logging.Filter):
         return True
 
 
-class AlerterProcessAttributeConstant:
-    """
-    Constants to manage alerter processing data that will be stored as an alert attribute.
-    """
-    __slots__ = ()
-
-    ATTRIBUTE_FORMATTER = '{alerter_name}Data'
-    """
-    Name of the alert attribute that will store the information about the alert processing by an alerter.
-    It is a format string based on the variable 'alerter_name' that will provide the name of the alerter.
-    """
-
-    KEY_NEW_EVENT = ALERTERS_TASK_BY_OPERATION['process_event']
-    """
-    Key name in the alerter attribute where processing info of the event is stored.
-    """
-
-    KEY_RECOVERY = ALERTERS_TASK_BY_OPERATION['process_recovery']
-    """
-    Key name in the alerter attribute where processing info of the recovery is stored.
-    """
-
-    KEY_REPEAT = ALERTERS_TASK_BY_OPERATION['process_repeat']
-    """
-    Key name in the alerter attribute where processing info of the repeat is stored.
-    """
-
-    # Field names of the info to store about the event/recovery processing.
-    FIELD_STATUS = 'status'
-    FIELD_RECEIVED = 'received'
-    FIELD_START = 'start'
-    FIELD_END = 'end'
-    FIELD_ELAPSED = 'elapsed_time'
-    FIELD_SUCCESS = 'success'
-    FIELD_RESPONSE = 'response'
-    FIELD_BG_TASK_ID = 'bgtask_id'
-    FIELD_SKIPPED = 'skipped'
-    FIELD_RETRIES = 'retries'
-    FIELD_REPETITIONS = 'repetitions'
-    FIELD_REASON = 'reason'
-    FIELD_TEMP_RECOVERY_DATA = '_tmp_recovery_data'
-    FIELD_TEMP_RECOVERY_DATA_TEXT = 'text'
-    FIELD_TEMP_RECOVERY_DATA_TASK_DEF = 'task_def'
+# class AlerterProcessAttributeConstant:
+#     """
+#     Constants to manage alerter processing data that will be stored as an alert attribute.
+#     """
+#     __slots__ = ()
+#
+#     ATTRIBUTE_FORMATTER = '{alerter_name}Data'
+#     """
+#     Name of the alert attribute that will store the information about the alert processing by an alerter.
+#     It is a format string based on the variable 'alerter_name' that will provide the name of the alerter.
+#     """
+#
+#     KEY_NEW_EVENT = ALERTERS_KEY_BY_OPERATION['process_event']
+#     """
+#     Key name in the alerter attribute where processing info of the event is stored.
+#     """
+#
+#     KEY_RECOVERY = ALERTERS_KEY_BY_OPERATION['process_recovery']
+#     """
+#     Key name in the alerter attribute where processing info of the recovery is stored.
+#     """
+#
+#     KEY_REPEAT = ALERTERS_KEY_BY_OPERATION['process_repeat']
+#     """
+#     Key name in the alerter attribute where processing info of the repeat is stored.
+#     """
+#
+#     # Field names of the info to store about the event/recovery processing.
+#     FIELD_STATUS = 'status'
+#     FIELD_RECEIVED = 'received'
+#     FIELD_START = 'start'
+#     FIELD_END = 'end'
+#     FIELD_ELAPSED = 'elapsed_time'
+#     FIELD_SUCCESS = 'success'
+#     FIELD_RESPONSE = 'response'
+#     FIELD_BG_TASK_ID = 'bgtask_id'
+#     FIELD_SKIPPED = 'skipped'
+#     FIELD_RETRIES = 'retries'
+#     FIELD_REPETITIONS = 'repetitions'
+#     FIELD_REASON = 'reason'
+#     FIELD_TEMP_RECOVERY_DATA = '_tmp_recovery_data'
+#     FIELD_TEMP_RECOVERY_DATA_TEXT = 'text'
+#     FIELD_TEMP_RECOVERY_DATA_TASK_DEF = 'task_def'
 
 
 class BGTaskAlerterDataConstants:
@@ -310,7 +312,7 @@ def safe_convert(value, type_, operation=None, default=None) -> Any:
         elif type_ and type_ != dict:
             return default
         else:
-            found = [x for x in ALERTERS_TASK_BY_OPERATION.values() if x in value]
+            found = [x for x in ALERTERS_KEY_BY_OPERATION.values() if x in value]
             if found:
                 # Found the other operation
                 return default
@@ -520,12 +522,6 @@ class GlobalAttributes:
     """
 
 
-class RecoveryActionsStatus(str, Enum):
-    InProgress = 'in_progress'
-    WaitingResolution = 'waiting'
-    Finished = 'finished'
-
-
 class RecoveryActionsFields:
     __slots__ = ()
     PROVIDER = VarDefinition('provider', default='awx')
@@ -546,23 +542,6 @@ class RecoveryActionsFields:
     Base interval no retry a failed recovery actions job execution on a provider. The actual interval
     will be a random value in the range (interval - interval/2, interval + interval/2)
     """
-
-
-class RecoveryActionsDataFields:
-    __slots__ = ()
-    ATTRIBUTE = "recoveryActionsData"
-    FIELD_STATUS = 'status'
-    FIELD_RESPONSE = 'response'
-    FIELD_RECEIVED = 'received'
-    FIELD_START = 'start'
-    FIELD_END = 'end'
-    FIELD_ELAPSED = 'elapsed_time'
-    FIELD_SUCCESS = 'success'
-    FIELD_BG_TASK_ID = 'bgtask_id'
-    FIELD_RETRIES = 'retries'
-    FIELD_JOB_ID = 'job_id'
-    FIELD_RECOVERED_AT = 'recovered_at'
-    FIELD_ALERTING_AT = 'alerting_at'
 
 
 class ContextualConfiguration(object):
@@ -596,7 +575,7 @@ class ContextualConfiguration(object):
       6. From default value if provided.
 
     If the value obtained if a dict and an operation is provided, returned value will be the one
-    related to the operation. The keys for the dictionary should be the values of ALERTERS_TASK_BY_OPERATION
+    related to the operation. The keys for the dictionary should be the values of ALERTERS_KEY_BY_OPERATION
     for each operation.
     """
 
@@ -615,7 +594,7 @@ class ContextualConfiguration(object):
     """
 
     TASKS_DEFINITION = VarDefinition('TASKS_DEFINITION', {
-        ALERTERS_TASK_BY_OPERATION['process_event']: {'queue': 'alert', 'priority': 1, 'retry_spec': {
+        ALERTERS_KEY_BY_OPERATION['process_event']: {'queue': 'alert', 'priority': 1, 'retry_spec': {
             'max_retries': 32,
             'exponential': True,
             'interval_first': 2.0,  # First retry after 2 secs
@@ -623,7 +602,7 @@ class ContextualConfiguration(object):
             'interval_max': 10.0 * 60,  # Max interval 10 min
             'jitter': False  # If true, random seconds between 0 and exponential calculated time
         }},
-        ALERTERS_TASK_BY_OPERATION['process_recovery']: {'queue': 'recovery', 'priority': 6, 'retry_spec': {
+        ALERTERS_KEY_BY_OPERATION['process_recovery']: {'queue': 'recovery', 'priority': 6, 'retry_spec': {
             'max_retries': 16,
             'exponential': True,
             'interval_first': 2.0,  # First retry after 10 secs
@@ -631,7 +610,7 @@ class ContextualConfiguration(object):
             'interval_max': 10.0 * 60,  # Max interval 10 min
             'jitter': False  # If true, random seconds between 0 and exponential calculated time
         }},
-        ALERTERS_TASK_BY_OPERATION['process_repeat']: {'queue': 'repeat', 'priority': 7, 'retry_spec': {
+        ALERTERS_KEY_BY_OPERATION['process_repeat']: {'queue': 'repeat', 'priority': 7, 'retry_spec': {
             'max_retries': 2,
             'exponential': True,
             'interval_first': 2.0,  # First retry after 2 secs
@@ -832,7 +811,7 @@ class ContextualConfiguration(object):
 
         alert_attributes = NormalizedDictView(alert.attributes) if alert else NormalizedDictView({})
         alerter_config = NormalizedDictView(alerter_config)
-        operation_key = ALERTERS_TASK_BY_OPERATION[operation] if operation else None
+        operation_key = ALERTERS_KEY_BY_OPERATION[operation] if operation else None
         pretty_alert = alert_pretty_json_string(alert) if alert else {}
 
         # From event tags attribute. if specific_event_tag is provided, check first.
@@ -1017,7 +996,7 @@ def init_configuration(config):
     global processed_environment
     processed_environment = preprocess_environment()
     overridable_keys = (
-        'ALERTERS_TASK_BY_OPERATION',
+        'ALERTERS_KEY_BY_OPERATION',
         'ALERTERS_TEMPLATES_LOCATION'
     )
     for key in overridable_keys:
@@ -1038,3 +1017,11 @@ def init_jinja_loader(app):
         ])
         app.jinja_loader = my_loader
         app.json_encoder = CustomJSONEncoder
+
+
+def init_alerters_backend():
+    from alerta.app import db
+    from alerta.database.backends.flexiblededup import SpecificBackend
+    be_alerters: SpecificBackend = getattr(db, 'backend_alerters')
+    global db_alerters
+    db_alerters = be_alerters

@@ -31,7 +31,8 @@ setup(
         'iometrics_alerta.routing'
     ],
     install_requires=[
-        'alerta-server[postgres]~=8.7.0',
+        # TODO: Remove branch when merged to master
+        'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git@feature/iometrics',
     ],
     include_package_data=True,
     zip_safe=False,
