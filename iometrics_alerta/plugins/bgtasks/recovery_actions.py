@@ -6,6 +6,7 @@ from typing import Union, Dict
 
 from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
+from alerta.database.backends.flexiblededup.models.recovery_actions import RecoveryActionData, RecoveryActionsStatus
 from alerta.exceptions import AlertaException
 
 # noinspection PyPackageRequirements
@@ -14,7 +15,7 @@ from celery import signature
 from alerta.models.enums import Status
 
 from iometrics_alerta import DateTime, RecoveryActionsFields, thread_local
-from iometrics_alerta import GlobalAttributes, RecoveryActionsDataFields, RecoveryActionsStatus
+from iometrics_alerta import GlobalAttributes
 from iometrics_alerta.plugins import RetryableException, result_for_exception
 from . import app, celery, getLogger, Alert
 from . import revoke_task  # noqa - Provide import to other classes
@@ -52,7 +53,6 @@ def launch_alerters(alert, recovery_actions_config, alerter_plugins: Dict[str, s
 
 
 def do_alert(alert, alerters, config, alerter_plugins: dict, repeating=False) -> Alert:
-    attributes_to_update = {}
     for alerter in alerters:
         if alerter not in alerter_plugins:
             logger.error("Unregistered alerter plugin '%s'", alerter)
@@ -74,10 +74,7 @@ def do_alert(alert, alerters, config, alerter_plugins: dict, repeating=False) ->
                              f" {str(e)}")
         if updated:
             alert = updated
-            attribute_name = plugin.alerter_attribute_name
-            attributes_to_update[attribute_name] = alert.attributes[attribute_name]
-        if attributes_to_update:
-            alert.update_attributes(attributes_to_update)
+            alert.update_attributes(alert.attributes)
     return alert
 
 
@@ -94,36 +91,36 @@ def launch_actions(self, alert_id: str, provider_name, provider_class: str, aler
         return
     logger.info("Executing recovery actions")
     recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
-    recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
-    current_retries = recovery_actions_data.get(RecoveryActionsDataFields.FIELD_RETRIES)
+    recovery_actions_data = RecoveryActionData.from_db(alert_id=alert_id)
+    current_retries = recovery_actions_data.retries
     if current_retries is None:
         current_retries = 0
-        recovery_actions_data[RecoveryActionsDataFields.FIELD_START] = DateTime.iso8601_utc(begin)
+        recovery_actions_data.start_time = datetime.utcnow()
     else:
         current_retries += 1
-    recovery_actions_data[RecoveryActionsDataFields.FIELD_RETRIES] = current_retries
+    recovery_actions_data.retries = current_retries
     try:
         provider = load_instance(provider_class, provider_name, app.config)
-        alert.attributes = alert.update_attributes({RecoveryActionsDataFields.ATTRIBUTE: recovery_actions_data})
+        recovery_actions_data.store()
         response = provider.execute_actions(alert,
                                             recovery_actions_config[RecoveryActionsFields.ACTIONS.var_name],
                                             recovery_actions_config[RecoveryActionsFields.EXTRA_CONFIG.var_name],
                                             operation_id)
         if response.status == RecoveryActionsResponseStatus.RESPONSE_OK:
             if response.operation_id:
-                recovery_actions_data[RecoveryActionsDataFields.FIELD_JOB_ID] = response.operation_id
+                recovery_actions_data.job_id = response.operation_id
             alert = wait_for_recovery(alert, recovery_actions_config, recovery_actions_data, response, alerter_plugins)
         elif response.status == RecoveryActionsResponseStatus.WAITING_RESPONSE:
             operation_id = response.operation_id
             if not operation_id:
                 raise RetryableException(f"[Alert '%s']: Missing operation_id in an async"
                                          f" recovery actions provider result")
-            recovery_actions_data[RecoveryActionsDataFields.FIELD_JOB_ID] = operation_id
+            recovery_actions_data.job_id = response.operation_id
             wait_for_response(alert, provider_name, provider_class, alerter_plugins, operation_id,
                               recovery_actions_config, recovery_actions_data)
         else:
             if response.operation_id:
-                recovery_actions_data[RecoveryActionsDataFields.FIELD_JOB_ID] = response.operation_id
+                recovery_actions_data.job_id = response.operation_id
             raise RetryableException(response)
     except (RetryableException, ConnectionError, RequestsConnectionError, RequestsTimeout) as e:
         retry_or_finish(self, alert, e, recovery_actions_config,
@@ -132,7 +129,7 @@ def launch_actions(self, alert_id: str, provider_name, provider_class: str, aler
         retry_or_finish(self, alert, e, recovery_actions_config,
                         recovery_actions_data, alerter_plugins, begin, no_retries=True)
     finally:
-        alert.update_attributes({RecoveryActionsDataFields.ATTRIBUTE: recovery_actions_data})
+        recovery_actions_data.store()
 
 
 def get_job_retry_delay(recovery_actions_config):
@@ -142,9 +139,10 @@ def get_job_retry_delay(recovery_actions_config):
     return retry_at
 
 
-def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict[str, str], recovery_actions_data,
+def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict[str, str],
+                     recovery_actions_data: RecoveryActionData,
                      recovery_actions_config, response, operation_id):
-    consumed_retries = recovery_actions_data.get(RecoveryActionsDataFields.FIELD_RETRIES, 0)
+    consumed_retries = recovery_actions_data.retries or 0
     max_retries = recovery_actions_config[RecoveryActionsFields.MAX_RETRIES.var_name]
     queue = recovery_actions_config[RecoveryActionsFields.TASK_QUEUE.var_name]
     countdown = get_job_retry_delay(recovery_actions_config)
@@ -162,7 +160,7 @@ def relaunch_actions(alert, provider_name, provider_class, alerter_plugins: Dict
         task = signature(launch_actions, args=[], kwargs=kwargs).apply_async(
             countdown=countdown, queue=queue, retries=consumed_retries,
             retry_spec={'max_retries': max_retries})
-        recovery_actions_data[RecoveryActionsDataFields.FIELD_BG_TASK_ID] = task.id
+        recovery_actions_data.bg_task_id = task.id
     else:
         logger.warning("Error executing recovery actions. No more retries")
         finish_launching_alerters(alert, response, recovery_actions_config, recovery_actions_data, alerter_plugins,
@@ -181,7 +179,7 @@ def request_async_status(self, alert_id: str, provider_name, provider_class: str
         return
     logger.info("Requesting recovery actions execution status for operation '%s'", operation_id)
     recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
-    recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
+    recovery_actions_data = RecoveryActionData.from_db(alert_id=alert_id)
     try:
         provider = load_instance(provider_class, provider_name, app.config)
         response = provider.get_execution_status(alert_id=alert.id, operation_id=operation_id)
@@ -209,11 +207,11 @@ def request_async_status(self, alert_id: str, provider_name, provider_class: str
         finish_launching_alerters(alert, e, recovery_actions_config,
                                   recovery_actions_data, alerter_plugins)
     finally:
-        alert.update_attributes({RecoveryActionsDataFields.ATTRIBUTE: recovery_actions_data})
+        recovery_actions_data.store()
 
 
 def wait_for_response(alert: Alert, provider_name: str, provider_class: str, alerter_plugins: Dict[str, str],
-                      operation_id, recovery_actions_config, recovery_actions_data):
+                      operation_id, recovery_actions_config, recovery_actions_data: RecoveryActionData):
     timeout_for_response = recovery_actions_config[RecoveryActionsFields.TIMEOUT_FOR_RESPONSE.var_name]
     status_request_interval = recovery_actions_config[RecoveryActionsFields.STATUS_REQUEST_INTERVAL.var_name]
     retries = floor(timeout_for_response / status_request_interval)
@@ -232,10 +230,11 @@ def wait_for_response(alert: Alert, provider_name: str, provider_class: str, ale
         'operation_id': operation_id
     }
     task = signature(request_async_status, args=[], kwargs=kwargs).apply_async(**properties)
-    recovery_actions_data[RecoveryActionsDataFields.FIELD_BG_TASK_ID] = task.id
+    recovery_actions_data.bg_task_id = task.id
 
 
-def wait_for_recovery(alert: Alert, recovery_actions_config, recovery_actions_data, response,
+def wait_for_recovery(alert: Alert, recovery_actions_config, recovery_actions_data: RecoveryActionData,
+                      response: RecoveryActionsResponse,
                       alerter_plugins: Dict[str, str]):
     fill_result(recovery_actions_data, response, status=RecoveryActionsStatus.WaitingResolution)
     finish_time = response.finish_time or DateTime.make_aware_utc(datetime.now())
@@ -253,7 +252,7 @@ def wait_for_recovery(alert: Alert, recovery_actions_config, recovery_actions_da
         'alerter_plugins': alerter_plugins,
     }
     task = signature(fail_not_resolved, args=[], kwargs=kwargs).apply_async(**properties)
-    recovery_actions_data[RecoveryActionsDataFields.FIELD_BG_TASK_ID] = task.id
+    recovery_actions_data.bg_task_id = task.id
     alerters_always = recovery_actions_config.get(RecoveryActionsFields.ALERTERS_ALWAYS.var_name, [])
     # Repeat event is forced in alerters invoked before, as recovery action providers may have enriched the alert
     # information
@@ -272,15 +271,17 @@ def fail_not_resolved(alert_id: str, alerter_plugins: Dict[str, str]):
     if alert.status not in (Status.Closed, Status.Expired):
         logger.info("Alert not recovered in time after recovery actions")
         recovery_actions_config = alert.attributes[GlobalAttributes.RECOVERY_ACTIONS.var_name]
-        recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
+        recovery_actions_data = RecoveryActionData.from_db(alert_id=alert_id)
         finish_launching_alerters(alert, Exception("Alert not resolved in time after recovery actions"),
                                   recovery_actions_config, recovery_actions_data, alerter_plugins)
+        recovery_actions_data.store()
 
 
 def finish_launching_alerters(alert, response: RecoveryActionsResponse | Exception, recovery_actions_config,
-                              recovery_actions_data, alerter_plugins: Dict[str, str], begin=None, retries=0):
+                              recovery_actions_data: RecoveryActionData, alerter_plugins: Dict[str, str],
+                              begin=None, retries=0):
     fill_result(recovery_actions_data, response, begin=begin, retries=retries)
-    recovery_actions_data[RecoveryActionsDataFields.FIELD_ALERTING_AT] = DateTime.iso8601_utc(datetime.now())
+    recovery_actions_data.alerting_time = datetime.utcnow()
     launch_alerters(alert, recovery_actions_config, alerter_plugins)
 
 
@@ -301,24 +302,22 @@ def retry_or_finish(task, alert, exc: Exception,
                                   task.request.retries)
 
 
-def fill_result(recovery_actions_data, response: Union[RecoveryActionsResponse, Exception],
+def fill_result(recovery_action_data: RecoveryActionData,
+                response: Union[RecoveryActionsResponse, Exception],
                 status=RecoveryActionsStatus.Finished,
                 begin=None, end=None, retries=0):
     if not end:
-        end = DateTime.make_aware_utc(datetime.now())
-    begin = DateTime.parse_utc(recovery_actions_data.get(RecoveryActionsDataFields.FIELD_START)) or begin or end
-    elapsed = DateTime.diff_seconds_utc(end, begin)
+        end = datetime.utcnow()
+    begin = recovery_action_data.start_time or begin or end
+    recovery_action_data.start_time = recovery_action_data.start_time or begin
     if isinstance(response, Exception) and response.args and isinstance(response.args[0], RecoveryActionsResponse):
         response = response.args[0]
     response_data, success = (result_for_exception(exc=response), False) if isinstance(response, Exception) \
         else (response.response_data, response.status == RecoveryActionsResponseStatus.RESPONSE_OK)
-    data = {
-        RecoveryActionsDataFields.FIELD_STATUS: status.value,
-        RecoveryActionsDataFields.FIELD_END: DateTime.iso8601_utc(end),
-        RecoveryActionsDataFields.FIELD_ELAPSED: elapsed,
-        RecoveryActionsDataFields.FIELD_SUCCESS: success,
-        RecoveryActionsDataFields.FIELD_RESPONSE: response_data
-    }
+    recovery_action_data.status = status
+    recovery_action_data.end_time = end
+    recovery_action_data.success = success
+    recovery_action_data.response = response_data
     if retries > 0:
-        data[RecoveryActionsDataFields.FIELD_RETRIES] = retries
-    recovery_actions_data.update(data)
+        recovery_action_data.retries = retries
+    return recovery_action_data

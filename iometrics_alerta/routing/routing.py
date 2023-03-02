@@ -2,10 +2,10 @@ import inspect
 import logging
 from typing import List
 
+from alerta.database.backends.flexiblededup.models.recovery_actions import RecoveryActionData
 from alerta.models.enums import Status
 
-from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration, \
-    RecoveryActionsDataFields
+from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration
 from iometrics_alerta import thread_local
 from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
 from iometrics_alerta.plugins import AlerterStatus
@@ -71,8 +71,8 @@ def rules(alert, plugins, config):  # noqa
     recovery_actions_config = alert_attributes.get(GAttr.RECOVERY_ACTIONS.var_name)
     if recovery_actions_config and isinstance(recovery_actions_config, dict) \
             and recovery_actions_config.get(RecoveryActionsFields.ACTIONS.var_name):
-        recovery_actions_data = alert.attributes.setdefault(RecoveryActionsDataFields.ATTRIBUTE, {})
-        ra_status = recovery_actions_data.get(RecoveryActionsDataFields.FIELD_STATUS)
+        recovery_action_data = RecoveryActionData.from_db(alert_id=alert.id)
+        ra_status = None if recovery_action_data is None else recovery_action_data.status
         if routing_request == 'process_status':
             # status change managed by the plugin
             result.append(_recovery_actions_plugin)
@@ -89,8 +89,9 @@ def rules(alert, plugins, config):  # noqa
     # Include recovery actions plugin if exists to ensure pre_receive is called.
     # pre_receive must ensure recoveryActions attribute will be formed properly so routing
     # can check it to decide post_receive plugins.
-    # post_recevice must do nothing if no recovery action is configured for the alert as
-    # it is going to be invoked event if no recovery actions are configured.
+    # post_receive method of recovery actions plugin must do nothing
+    # if no recovery action is configured for the alert as
+    # it is going to be invoked even if no recovery actions are configured.
     if alert.status != Status.Closed and _recovery_actions_plugin:
         result.append(_recovery_actions_plugin)
 

@@ -522,12 +522,6 @@ class GlobalAttributes:
     """
 
 
-class RecoveryActionsStatus(str, Enum):
-    InProgress = 'in_progress'
-    WaitingResolution = 'waiting'
-    Finished = 'finished'
-
-
 class RecoveryActionsFields:
     __slots__ = ()
     PROVIDER = VarDefinition('provider', default='awx')
@@ -548,23 +542,6 @@ class RecoveryActionsFields:
     Base interval no retry a failed recovery actions job execution on a provider. The actual interval
     will be a random value in the range (interval - interval/2, interval + interval/2)
     """
-
-
-class RecoveryActionsDataFields:
-    __slots__ = ()
-    ATTRIBUTE = "recoveryActionsData"
-    FIELD_STATUS = 'status'
-    FIELD_RESPONSE = 'response'
-    FIELD_RECEIVED = 'received'
-    FIELD_START = 'start'
-    FIELD_END = 'end'
-    FIELD_ELAPSED = 'elapsed_time'
-    FIELD_SUCCESS = 'success'
-    FIELD_BG_TASK_ID = 'bgtask_id'
-    FIELD_RETRIES = 'retries'
-    FIELD_JOB_ID = 'job_id'
-    FIELD_RECOVERED_AT = 'recovered_at'
-    FIELD_ALERTING_AT = 'alerting_at'
 
 
 class ContextualConfiguration(object):
@@ -1044,7 +1021,7 @@ def init_jinja_loader(app):
 
 def init_alerters_backend():
     from alerta.app import db
-    from alerta.database.backends.flexiblededup import AlertersBackend
-    be_alerters: AlertersBackend = getattr(db, 'backend_alerters')
+    from alerta.database.backends.flexiblededup import SpecificBackend
+    be_alerters: SpecificBackend = getattr(db, 'backend_alerters')
     global db_alerters
     db_alerters = be_alerters

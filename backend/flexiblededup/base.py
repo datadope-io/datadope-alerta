@@ -9,7 +9,7 @@ import pytz
 from flask import current_app, render_template_string  # noqa
 
 from alerta.app import alarm_model
-from alerta.database.backends.flexiblededup.alerters import AlertersBackend
+from alerta.database.backends.flexiblededup.specific import SpecificBackend
 from alerta.database.backends.postgres import Backend as PGBackend, Record, register_adapter, Json
 from alerta.models.enums import Status, Severity
 from alerta.utils.format import DateTime
@@ -94,7 +94,7 @@ class Backend(PGBackend):
                     db_model = f.read()
         super(Backend, self).create_engine(app, uri, dbname, raise_on_error, db_model)
         register_adapter(dict, JsonWithDatetime)
-        self.backend_alerters = AlertersBackend(self)
+        self.backend_alerters = SpecificBackend(self)
 
     def create_alert(self, alert):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)

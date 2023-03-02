@@ -8,7 +8,7 @@ from requests.exceptions import ConnectionError as RequestsConnectionError, Time
 # noinspection PyPackageRequirements
 from celery.utils.time import get_exponential_backoff_interval
 
-from alerta.database.backends.flexiblededup.alerters_model import AlerterOperationData
+from alerta.database.backends.flexiblededup.models.alerters import AlerterOperationData
 from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException

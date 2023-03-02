@@ -11,8 +11,8 @@ class AlerterOperationData:
     @classmethod
     def get_db(cls):
         if cls.__db is None:
-            from .alerters import AlertersBackend
-            cls.__db = AlertersBackend.instance
+            from ..specific import SpecificBackend
+            cls.__db = SpecificBackend.instance
         return cls.__db
 
     def __init__(self, alert_id, alerter, operation, **kwargs):

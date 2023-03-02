@@ -5,7 +5,6 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, Optional, Type
 
-from alerta.database.backends.flexiblededup.alerters_model import AlerterOperationData
 from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
@@ -14,7 +13,7 @@ from iometrics_alerta import DateTime, get_config, thread_local, AlertIdFilter, 
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
 from iometrics_alerta import ContextualConfiguration as CC
-from . import Alerter, AlerterStatus, prepare_result, result_for_exception
+from . import Alerter, AlerterStatus, prepare_result, result_for_exception, AlerterOperationData
 from .bgtasks import revoke_task, event_task, recovery_task, repeat_task
 
 
@@ -35,7 +34,6 @@ class IOMAlerterPlugin(PluginBase, ABC):
         self.__global_app_config = None
         self.__alerter_name = None
         self.__alerter_config = None
-        self.__alerter_attribute_name = None
 
     # noinspection PyShadowingBuiltins
     def get_config(self, key, default=None, type=None, config=None):

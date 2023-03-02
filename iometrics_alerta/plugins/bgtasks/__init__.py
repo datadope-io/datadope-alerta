@@ -30,7 +30,7 @@ def revoke_task(task_id):
     celery.control.revoke(task_id)
 
 
-# Import all tasks to ensure celery finds them including only the package in CELERTY_IMPORTS
+# Import all tasks to ensure celery finds them including only the package in CELERY_IMPORTS
 from .auto_close import check_automatic_closing  # noqa - To provide import for package modules
 
 from .recovery_actions import launch_actions  # noqa - To provide import for package modules

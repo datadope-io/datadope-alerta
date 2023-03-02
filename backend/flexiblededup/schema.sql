@@ -223,6 +223,25 @@ CREATE TABLE IF NOT EXISTS alerter_data (
     CONSTRAINT alerter_data_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS recovery_action_data (
+    alert_id text NOT NULL PRIMARY KEY,
+    provider text NOT NULL,
+    actions text[] NOT NULL,
+    status text NOT NULL,
+    received_time timestamp without time zone,
+    start_time timestamp without time zone,
+    end_time timestamp without time zone,
+    recovery_time timestamp without time zone,
+    alerting_time timestamp without time zone,
+    success boolean,
+    retries integer,
+    response jsonb,
+    job_id text,
+    bg_task_id text,
+    CONSTRAINT recovery_action_data_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
+);
+
+
 CREATE UNIQUE INDEX IF NOT EXISTS alerter_data_oper_key ON alerter_data
 USING btree (alert_id, alerter, operation) WHERE operation <> 'repeat';
 

@@ -12,7 +12,7 @@ from celery.utils.log import get_task_logger
 # noinspection PyPackageRequirements
 from jinja2 import TemplateNotFound
 
-from alerta.database.backends.flexiblededup.alerters_model import AlerterOperationData
+from alerta.database.backends.flexiblededup.models.alerters import AlerterOperationData
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     NormalizedDictView, render_template, ALERTERS_KEY_BY_OPERATION, \

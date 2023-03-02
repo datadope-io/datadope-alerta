@@ -64,7 +64,7 @@ class RecoveryActionsProvider(ABC):
         :param alert:
         :param actions:
         :param recovery_actions_config:
-        :param retry_operation_id: A preivous operation id was returned but execution failed.
+        :param retry_operation_id: A previous operation id was returned but execution failed.
         :return:
         """
         pass
