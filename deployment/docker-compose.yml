@@ -81,7 +81,7 @@ services:
       - "8000:8000"
     environment:
       ALERTA_WEBUI_PORT: 8000
-      ALERTA_SERVER_ENDPOINT: http://server:8000
+      ALERTA_SERVER_ENDPOINT: "${ALERTA_SERVER_ENDPOINT:-http://localhost:8001}"
 
   celery-worker:
     image: iometrics-alerta/celery-worker
