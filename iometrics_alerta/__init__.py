@@ -7,11 +7,13 @@ from collections.abc import MutableMapping
 from dataclasses import dataclass
 from datetime import datetime, date
 from enum import Enum
-from typing import Any, Tuple, Optional, List, Dict
+from typing import Any, Tuple, Optional, List, Dict, Union
 
 from dateutil import parser
 # noinspection PyPackageRequirements
 import flask
+# noinspection PyPackageRequirements
+from flask.json.provider import JSONProvider
 # noinspection PyPackageRequirements
 import jinja2
 import pytz
@@ -131,6 +133,21 @@ class CustomJSONEncoder(AlertaCustomJSONEncoder):
         return super().default(o)
 
 
+class AlertaJsonProvider(JSONProvider):
+    """JSON Provider for Flask app to use CustomJSONEncoder."""
+
+    ensure_ascii: bool = True
+    sort_keys: bool = True
+
+    def dumps(self, obj, **kwargs):
+        kwargs.setdefault('ensure_ascii', self.ensure_ascii)
+        kwargs.setdefault('sort_keys', self.sort_keys)
+        return json.dumps(obj, **kwargs, cls=CustomJSONEncoder)
+
+    def loads(self, s: Union[str, bytes], **kwargs):
+        return json.loads(s, **kwargs)
+
+
 class AlertIdFilter(logging.Filter):
     _instance = None
     _properties = ['alert_id', 'alerter_name', 'operation']
@@ -148,51 +165,6 @@ class AlertIdFilter(logging.Filter):
             else:
                 setattr(record, prop, '-')
         return True
-
-
-# class AlerterProcessAttributeConstant:
-#     """
-#     Constants to manage alerter processing data that will be stored as an alert attribute.
-#     """
-#     __slots__ = ()
-#
-#     ATTRIBUTE_FORMATTER = '{alerter_name}Data'
-#     """
-#     Name of the alert attribute that will store the information about the alert processing by an alerter.
-#     It is a format string based on the variable 'alerter_name' that will provide the name of the alerter.
-#     """
-#
-#     KEY_NEW_EVENT = ALERTERS_KEY_BY_OPERATION['process_event']
-#     """
-#     Key name in the alerter attribute where processing info of the event is stored.
-#     """
-#
-#     KEY_RECOVERY = ALERTERS_KEY_BY_OPERATION['process_recovery']
-#     """
-#     Key name in the alerter attribute where processing info of the recovery is stored.
-#     """
-#
-#     KEY_REPEAT = ALERTERS_KEY_BY_OPERATION['process_repeat']
-#     """
-#     Key name in the alerter attribute where processing info of the repeat is stored.
-#     """
-#
-#     # Field names of the info to store about the event/recovery processing.
-#     FIELD_STATUS = 'status'
-#     FIELD_RECEIVED = 'received'
-#     FIELD_START = 'start'
-#     FIELD_END = 'end'
-#     FIELD_ELAPSED = 'elapsed_time'
-#     FIELD_SUCCESS = 'success'
-#     FIELD_RESPONSE = 'response'
-#     FIELD_BG_TASK_ID = 'bgtask_id'
-#     FIELD_SKIPPED = 'skipped'
-#     FIELD_RETRIES = 'retries'
-#     FIELD_REPETITIONS = 'repetitions'
-#     FIELD_REASON = 'reason'
-#     FIELD_TEMP_RECOVERY_DATA = '_tmp_recovery_data'
-#     FIELD_TEMP_RECOVERY_DATA_TEXT = 'text'
-#     FIELD_TEMP_RECOVERY_DATA_TASK_DEF = 'task_def'
 
 
 class BGTaskAlerterDataConstants:
@@ -279,9 +251,15 @@ def merge(dict1, dict2):
     :return: dict1 reference with updated value.
     """
     for k in dict2:
-        if k in dict1 and isinstance(dict1[k], (dict, NormalizedDictView)) \
-                and isinstance(dict2[k], (dict, NormalizedDictView)):
-            merge(dict1[k], dict2[k])
+        if k in dict1 and isinstance(dict1[k], (dict, NormalizedDictView)):
+            if isinstance(dict2[k], (dict, NormalizedDictView)):
+                merge(dict1[k], dict2[k])
+            elif isinstance(dict2[k], str):
+                as_dict = json.loads(dict2[k])
+                if as_dict is not None:
+                    merge(dict1[k], as_dict)
+                else:
+                    merge(dict1[k], dict2[k])
         else:
             dict1[k] = dict2[k]
     return dict1
@@ -340,6 +318,7 @@ def safe_convert(value, type_, operation=None, default=None) -> Any:
 
 # noinspection PyShadowingBuiltins
 def get_config(key, default=None, type=None, config: dict = None):
+    initialize()
     if default is not None and type is None:
         type = builtins.type(default)
 
@@ -369,7 +348,15 @@ class NormalizedDictView(MutableMapping):
     def __init__(self, original: dict):
         self.__store = original
         self.__keys_store = dict()
-        self.update(original)  # use the free update to set keys
+        keys_to_remove = []
+        for key, value in original.items():
+            normalized_key = self.key_transform(key)
+            if normalized_key in self.__keys_store:
+                logger.info("Duplicate normalized key in dict. Updating element: %s", key)
+                keys_to_remove.append(self.__keys_store[normalized_key])
+            self.__keys_store[normalized_key] = key
+        for key in keys_to_remove:
+            del self.__store[key]
 
     def __getitem__(self, key):
         return self.__store[self.__keys_store[self.key_transform(key)]]
@@ -493,7 +480,7 @@ class GlobalAttributes:
     """
 
     __slots__ = ()
-    ALERTERS = VarDefinition('alerters', default=[])
+    ALERTERS = VarDefinition('alerters', default=[], specific_event_tag='ALERTA_ALERTERS')
     """
     Alert attribute with the list of alerters to notify to.
     """
@@ -820,7 +807,7 @@ class ContextualConfiguration(object):
         event_tags = ContextualConfiguration.get_event_tags(alert, operation) if alert else None
         from_tags = None
         if event_tags:
-            tag_list = {t for t in (specific_event_tag, alerter_name+var_name, var_name) if t}
+            tag_list = list(dict.fromkeys([t for t in (specific_event_tag, alerter_name+var_name, var_name) if t]))
             for t in tag_list:
                 from_tags = safe_convert(event_tags.get_for_operation(t, operation), type_, operation)
                 if from_tags is not None:
@@ -846,8 +833,8 @@ class ContextualConfiguration(object):
         else:
             from_attr = None
         if from_attr is None:
-            var_names = alerter_name+var_name, var_name
-            for name in set(var_names):
+            var_names = [alerter_name+var_name, var_name]
+            for name in list(dict.fromkeys(var_names)):
                 from_attr = safe_convert(alert_attributes.get_for_operation(name, operation), type_, operation)
                 if from_attr is not None:
                     break
@@ -1010,18 +997,41 @@ def init_configuration(config):
 
 
 def init_jinja_loader(app):
-    with app.app_context():
-        my_loader = jinja2.ChoiceLoader([
-            app.jinja_loader,
-            jinja2.FileSystemLoader(ALERTERS_TEMPLATES_LOCATION),
-        ])
-        app.jinja_loader = my_loader
-        app.json_encoder = CustomJSONEncoder
+    my_loader = jinja2.ChoiceLoader([
+        app.jinja_loader,
+        jinja2.FileSystemLoader(ALERTERS_TEMPLATES_LOCATION),
+    ])
+    app.jinja_loader = my_loader
+    app.json_provider_class = AlertaJsonProvider
+    try:
+        app.json = AlertaJsonProvider(app)
+    except Exception:  # noqa
+        pass
 
 
 def init_alerters_backend():
     from alerta.app import db
-    from alerta.database.backends.flexiblededup import SpecificBackend
+    from .backend.flexiblededup import SpecificBackend
     be_alerters: SpecificBackend = getattr(db, 'backend_alerters')
     global db_alerters
     db_alerters = be_alerters
+
+
+_initialized = False
+
+
+def is_initialized():
+    return _initialized
+
+
+def initialize(app=None):
+    global _initialized
+    if not _initialized:
+        if app is None:
+            from flask import current_app
+            app = current_app
+        with app.app_context():
+            init_configuration(app.config)
+            init_jinja_loader(app)
+            init_alerters_backend()
+        _initialized = True

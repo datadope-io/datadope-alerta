@@ -4,18 +4,16 @@ from importlib import import_module
 from math import floor
 from typing import Union, Dict
 
-from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
-
-from alerta.database.backends.flexiblededup.models.recovery_actions import RecoveryActionData, RecoveryActionsStatus
-from alerta.exceptions import AlertaException
-
 # noinspection PyPackageRequirements
 from celery import signature
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
+from alerta.exceptions import AlertaException
 from alerta.models.enums import Status
 
 from iometrics_alerta import DateTime, RecoveryActionsFields, thread_local
 from iometrics_alerta import GlobalAttributes
+from iometrics_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionData, RecoveryActionsStatus
 from iometrics_alerta.plugins import RetryableException, result_for_exception
 from . import app, celery, getLogger, Alert
 from . import revoke_task  # noqa - Provide import to other classes

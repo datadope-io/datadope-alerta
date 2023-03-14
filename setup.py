@@ -31,10 +31,9 @@ setup(
     #     'alerta.database.backends.flexiblededup',
     #     'iometrics_alerta',
     # ] + ['iometrics_alerta.' + x for x in find_packages(exclude=['routing'])],
-    packages=['alerta.database.backends.flexiblededup'] + find_packages(exclude=['iometrics_alerta.routing']),
+    packages=find_packages(exclude=['iometrics_alerta.routing']),
     install_requires=[
-        # TODO: Remove branch when merged to master
-        'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git@feature/iometrics',
+        'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
         'requests',
         'celery[redis]~=5.2.7'
     ],
@@ -56,6 +55,9 @@ setup(
     ],
     python_requires='>=3.10',
     entry_points={
+        'alerta.database.backends': [
+            'iometrics = iometrics_alerta.backend.flexiblededup'
+        ],
         'alerta.plugins': [
             'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
             'recovery_actions = iometrics_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',

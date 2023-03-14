@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS metrics (
     CONSTRAINT metrics_pkey PRIMARY KEY ("group", name, type)
 );
 ALTER TABLE metrics ALTER COLUMN total_time TYPE BIGINT;
+ALTER TABLE metrics ALTER COLUMN count TYPE BIGINT;
 
 
 CREATE TABLE IF NOT EXISTS perms (
@@ -241,9 +242,13 @@ CREATE TABLE IF NOT EXISTS recovery_action_data (
     CONSTRAINT recovery_action_data_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
 );
 
-
 CREATE UNIQUE INDEX IF NOT EXISTS alerter_data_oper_key ON alerter_data
 USING btree (alert_id, alerter, operation) WHERE operation <> 'repeat';
 
 CREATE INDEX IF NOT EXISTS alerter_data_oper_key ON alerter_data
 USING btree (alert_id, alerter, operation) WHERE operation = 'repeat';
+
+CREATE TABLE IF NOT EXISTS key_value_store (
+    key VARCHAR(50) NOT NULL PRIMARY KEY,
+    value text
+)

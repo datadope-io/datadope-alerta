@@ -1,18 +1,21 @@
 import json
 import logging
 import os
+import threading
 from datetime import datetime, date
 from enum import Enum
 
 import pytz
 
 from flask import current_app, render_template_string  # noqa
+from psycopg2.extras import register_composite
 
 from alerta.app import alarm_model
-from alerta.database.backends.flexiblededup.specific import SpecificBackend
-from alerta.database.backends.postgres import Backend as PGBackend, Record, register_adapter, Json
+from alerta.database.backends.postgres import Backend as PGBackend, Record, register_adapter, Json, HistoryAdapter
 from alerta.models.enums import Status, Severity
 from alerta.utils.format import DateTime
+
+from .specific import SpecificBackend
 
 ATTRIBUTE_DEDUPLICATION = 'deduplication'
 ATTRIBUTE_DEDUPLICATION_TYPE = 'deduplicationType'
@@ -50,6 +53,8 @@ class JsonWithDatetime(Json):
 class Backend(PGBackend):
 
     def __init__(self, app=None):
+        self.uri = None
+        self.dbname = None
         self.backend_alerters = None
         super().__init__(app=app)
 
@@ -85,14 +90,32 @@ class Backend(PGBackend):
                     deduplication = None
         return deduplication
 
-    def create_engine(self, app, uri, dbname=None, raise_on_error=True, db_model=None):
-        uri = f"postgresql://{uri.split('://')[1]}"
-        if not db_model:
+    def create_engine(self, app, uri, dbname=None, raise_on_error=True):
+        self.uri = f"postgresql://{uri.split('://')[1]}"
+        self.dbname = dbname
+
+        lock = threading.Lock()
+        with lock:
+            conn = self.connect()
             schema_file = os.path.abspath(os.path.join(os.path.dirname(__file__), 'schema.sql'))
-            if os.path.exists(schema_file):
-                with open(schema_file, 'r') as f:
-                    db_model = f.read()
-        super(Backend, self).create_engine(app, uri, dbname, raise_on_error, db_model)
+            with open(schema_file, 'r') as f:
+                try:
+                    conn.cursor().execute(f.read())
+                    conn.commit()
+                except Exception as e:
+                    if raise_on_error:
+                        raise
+                    app.logger.warning(e)
+
+        register_adapter(dict, Json)
+        register_adapter(datetime, self._adapt_datetime)
+        register_composite(
+            'history',
+            conn,
+            globally=True
+        )
+        from alerta.models.alert import History
+        register_adapter(History, HistoryAdapter)
         register_adapter(dict, JsonWithDatetime)
         self.backend_alerters = SpecificBackend(self)
 
@@ -377,3 +400,12 @@ class Backend(PGBackend):
                AND (attributes->>'autoCloseAt')::timestamptz < current_timestamp
         """
         return [x[0] for x in self._fetchall(select, {}, limit=limit)]
+
+    def fetchall_no_limit(self, query, vars_):
+        """
+        Return all matching rows.
+        """
+        cursor = self.get_db().cursor()
+        self._log(cursor, query, vars_)
+        cursor.execute(query, vars_)
+        return cursor.fetchall()

@@ -3,16 +3,15 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional, Any, Dict, Tuple, Union
 
-from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
-
 # noinspection PyPackageRequirements
 from celery.utils.time import get_exponential_backoff_interval
+from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
-from alerta.database.backends.flexiblededup.models.alerters import AlerterOperationData
-from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
+from alerta.models.metrics import Timer
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
+from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
+from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException
-
 from .. import app, celery, getLogger, Alert, prepare_result, result_for_exception
 # noinspection PyUnresolvedReferences
 from .. import revoke_task  # To provide import to package modules
@@ -230,7 +229,12 @@ class AlertTask(celery.Task, ABC):
     def run(self, alerter_data: dict, alert: dict, reason: Optional[str]):
         alerter = self._get_alerter(alerter_data, self)
         operation = self.get_operation()
+        operation_key = self.get_operation_key()
         self.logger.info("Running background task")
+        bg_timer = Timer('alerters', f"{alerter.name}_{operation_key}",
+                         f"{alerter.name} {operation_key}",
+                         f"Total time and number of alerter {alerter.name} operation {operation_key}")
+        ts = bg_timer.start_timer()
         try:
             response = getattr(alerter, operation)(Alert.parse(alert), reason)
             return response
@@ -244,7 +248,8 @@ class AlertTask(celery.Task, ABC):
                     raise
                 retry_data['_countdown_'] = countdown
                 self.retry(exc=e, max_retries=max_retries, countdown=countdown, retry_spec=retry_data)
-
+        finally:
+            bg_timer.stop_timer(ts)
 
 # Tasks defined as classes must be instantiated and registered
 

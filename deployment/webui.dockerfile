@@ -14,6 +14,7 @@ RUN tar -xzvf alerta-webui.tar.gz \
     && rm alerta-webui.tar.gz
 
 WORKDIR /app/dist
+COPY deployment/logos /app/dist/logos
 COPY deployment/entry_point_webui.sh /usr/local/bin
 
 CMD entry_point_webui.sh
