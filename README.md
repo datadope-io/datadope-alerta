@@ -161,13 +161,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-alerta-server = {extras=["postgres"], git = "https://github.com/datadope-io/alerta.git", ref = "feature/iometrics"}
+alerta-server = {extras=["postgres"], git = "https://github.com/datadope-io/alerta.git"}
 "celery[redis]" = "==5.2.7"
 alerta = "==8.5.1"  # Client. Needed for periodic background tasks
 python-dotenv = "*"
 pyopenssl = "*"
-zabbix-alerta = {git = "https://github.com/alerta/zabbix-alerta"}
-bson = "*"  # Not needed with master version but needed for 8.7.0
+# zabbix-alerta = {git = "https://github.com/alerta/zabbix-alerta"}
+# bson = "*"  # Not needed with master version but needed for 8.7.0
 requests = "*"
 gunicorn = "*"
 flower = "*"
@@ -179,8 +179,7 @@ python-dateutil = "*"
 python_version = "3.10"
 ```
 
-IOMetrics packages may be included in this Pipfile to included in the Pipfile, pointing to the wheel files or to the
-git repo.
+IOMetrics packages may be included in this Pipfile pointing to the wheel files or to the git repo.
 
 ### Configuration
 

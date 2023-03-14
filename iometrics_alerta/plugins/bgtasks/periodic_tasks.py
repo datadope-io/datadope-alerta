@@ -15,7 +15,14 @@ def setup_periodic_tasks(sender, **kwargs):
     interval = config.get(CONFIG_AUTO_CLOSE_TASK_INTERVAL, DEFAULT_AUTO_CLOSE_TASK_INTERVAL)
     sender.add_periodic_task(timedelta(seconds=interval),
                              check_automatic_closing.s(),
-                             name='auto close')
+                             name='auto_close')
+    from alerta.app import plugins
+    for plugin in plugins.plugins.values():
+        if getattr(plugin, 'register_periodic_tasks', None):
+            with app.app_context():
+                tasks = plugin.register_periodic_tasks(config)
+            for task_class, interval in tasks:
+                sender.add_periodic_task(timedelta(seconds=interval), task_class.s())
 
 
 class ClientTask(celery.Task):
@@ -33,8 +40,8 @@ class ClientTask(celery.Task):
 
 @celery.task(base=ClientTask, bind=True, ignore_result=True, queue=app.config.get('AUTO_CLOSE_TASK_QUEUE'))
 def check_automatic_closing(self):
-    thread_local.alert_id = '-'
-    thread_local.alerter_name = '-'
+    thread_local.alert_id = None
+    thread_local.alerter_name = 'system'
     thread_local.operation = 'auto_close'
 
     logger.debug('Automatic closing task launched')
@@ -58,3 +65,6 @@ def check_automatic_closing(self):
                             logger.warning("Error received from alerta server closing alert: %s", response)
     except Exception as e:
         logger.warning("Error closing alerts: %s", e)
+    finally:
+        thread_local.alerter_name = None
+        thread_local.operation = None

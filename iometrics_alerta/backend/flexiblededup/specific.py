@@ -1,8 +1,10 @@
 from typing import Optional
 
-from .models.alerters import AlerterOperationData
-from .models.recovery_actions import RecoveryActionData
 from alerta.database.backends.postgres.base import Backend
+
+from .models.alerters import AlerterOperationData
+from .models.key_value_store import KeyValueParameter
+from .models.recovery_actions import RecoveryActionData
 
 
 # noinspection PyProtectedMember
@@ -128,3 +130,31 @@ class SpecificBackend:
         """
         record = self.backend._updateone(update, vars(recovery_action_data), returning=True)
         return RecoveryActionData.from_record(record) if record else None
+
+    def get_value_from_key(self, key):
+        query = """
+            SELECT * FROM key_value_store WHERE key=%(key)s
+        """
+        record = self.backend._fetchone(query, dict(key=key))
+        return KeyValueParameter.from_record(record) if record else None
+
+    def create_key_value(self, key_value: KeyValueParameter):
+        insert = """
+            INSERT INTO key_value_store (key, value)
+            VALUES (%(key)s, %(value)s)
+         RETURNING *
+        """
+        record = self.backend._insert(insert, vars(key_value))
+        return KeyValueParameter.from_record(record) if record else None
+
+    def update_key_value(self, key_value: KeyValueParameter):
+        update = """
+            UPDATE key_value_store
+               SET value=%(value)s
+             WHERE key=%(key)s 
+         RETURNING *
+        """
+        record = self.backend._updateone(update, vars(key_value), returning=True)
+        if record is None:
+            record = self.create_key_value(key_value)
+        return KeyValueParameter.from_record(record) if record else None

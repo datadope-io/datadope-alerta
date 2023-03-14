@@ -12,12 +12,12 @@ from celery.utils.log import get_task_logger
 # noinspection PyPackageRequirements
 from jinja2 import TemplateNotFound
 
-from alerta.database.backends.flexiblededup.models.alerters import AlerterOperationData
 from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     NormalizedDictView, render_template, ALERTERS_KEY_BY_OPERATION, \
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
     AlertIdFilter
+from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 
 
 def getLogger(name):  # noqa
@@ -91,7 +91,7 @@ class Alerter(ABC):
         pass
 
     @classmethod
-    def get_alerter_config(cls, alerter_name) -> Dict[str, Any]:
+    def get_alerter_config(cls, alerter_name, do_not_cache=False) -> Dict[str, Any]:
         """
         Reads alerter config using global app configuration. First get default configuration
         from alerter and merges it with configuration from environment or config file.
@@ -101,6 +101,8 @@ class Alerter(ABC):
 
         Override to implement a different mechanism to get the config for the alerter.
 
+        :param alerter_name:
+        :param do_not_cache: If true and data must be calculated, the calculated data is not stored
         :return: alerter configuration
         """
         if cls._alerter_config is None:
@@ -114,7 +116,11 @@ class Alerter(ABC):
                     logger.error("Wrong configuration for alerter '%s': '%s'",
                                  alerter_name, config)
                     config = {}
-            cls._alerter_config = merge(default, config)
+            alerter_config = merge(default, config)
+            if do_not_cache:
+                return alerter_config
+            else:
+                cls._alerter_config = alerter_config
         return cls._alerter_config
 
     @staticmethod

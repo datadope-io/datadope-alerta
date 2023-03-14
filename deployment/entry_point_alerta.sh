@@ -23,4 +23,4 @@ if [ -n "${ADMIN_USERS}" ]; then
   fi
 fi
 
-gunicorn --preload -w "${GUNICORN_WORKERS}" -b "${GUNICORN_BIND}" --timeout "${GUNICORN_TIMEOUT}" wsgi:app
+gunicorn --preload -w "${GUNICORN_WORKERS}" -b "${GUNICORN_BIND}" --timeout "${GUNICORN_TIMEOUT}" iom_wsgi:app

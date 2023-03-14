@@ -1,21 +1,19 @@
 from datetime import datetime
-
-from pkg_resources import iter_entry_points
 from typing import Optional, Any
 
-from alerta.database.backends.flexiblededup.models.recovery_actions import RecoveryActionsStatus, RecoveryActionData
+from pkg_resources import iter_entry_points
+
 from alerta.models.alert import Alert
 from alerta.models.enums import Status
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import DateTime, NormalizedDictView, ContextualConfiguration as CConfig, safe_convert, \
     VarDefinition, get_config, thread_local
-from iometrics_alerta import get_hierarchical_configuration
 from iometrics_alerta import GlobalAttributes
 from iometrics_alerta import RecoveryActionsFields as RAConfigFields
-
+from iometrics_alerta import get_hierarchical_configuration
+from iometrics_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionsStatus, RecoveryActionData
 from iometrics_alerta.plugins import getLogger
-from iometrics_alerta.plugins.bgtasks.recovery_actions import launch_actions, do_alert, fill_result, revoke_task
 
 logger = getLogger(__name__)
 
@@ -102,6 +100,8 @@ class RecoveryActionsPlugin(PluginBase):
         return True
 
     def post_receive(self, alert: 'Alert', **kwargs) -> Optional['Alert']:
+        from iometrics_alerta.plugins.bgtasks.recovery_actions import launch_actions, do_alert, fill_result
+
         thread_local.alert_id = alert.id
         thread_local.alerter_name = 'recovery_actions'
         thread_local.operation = 'post_receive'
@@ -163,6 +163,7 @@ class RecoveryActionsPlugin(PluginBase):
             thread_local.operation = None
 
     def status_change(self, alert: 'Alert', status: str, text: str, **kwargs) -> Any:
+        from iometrics_alerta.plugins.bgtasks.recovery_actions import revoke_task
         thread_local.alert_id = alert.id
         thread_local.alerter_name = 'recovery_actions'
         thread_local.operation = 'status_change'

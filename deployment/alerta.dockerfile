@@ -71,7 +71,7 @@ COPY --from=builder /usr/lib/ /usr/lib/
 COPY config_example/* /etc/iometrics-alerta/
 
 WORKDIR /app
-COPY deployment/wsgi.py /app/
+COPY deployment/iom_wsgi.py /app/
 COPY deployment/entry_point_alerta.sh /usr/local/bin/
 
 # EXPOSE 8000

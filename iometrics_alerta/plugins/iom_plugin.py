@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from datetime import datetime
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, List, Tuple, Callable
 
 from alerta.models.alert import Alert
 from alerta.models.enums import Status
@@ -14,14 +14,26 @@ from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
 from iometrics_alerta import ContextualConfiguration as CC
 from . import Alerter, AlerterStatus, prepare_result, result_for_exception, AlerterOperationData
-from .bgtasks import revoke_task, event_task, recovery_task, repeat_task
 
 
-ALERT_TASK_BY_OPERATION = {
-    Alerter.process_event.__name__: event_task,
-    Alerter.process_recovery.__name__: recovery_task,
-    Alerter.process_repeat.__name__: repeat_task
-}
+_alert_task_by_operation = {}
+
+
+def get_alert_task_by_operation(operation):
+    global _alert_task_by_operation
+    if not _alert_task_by_operation:
+        from .bgtasks import event_task, recovery_task, repeat_task
+        _alert_task_by_operation.update({
+            Alerter.process_event.__name__: event_task,
+            Alerter.process_recovery.__name__: recovery_task,
+            Alerter.process_repeat.__name__: repeat_task
+        })
+    return _alert_task_by_operation[operation]
+
+
+def revoke_task(task_id):
+    from .bgtasks import revoke_task
+    revoke_task(task_id)
 
 
 class IOMAlerterPlugin(PluginBase, ABC):
@@ -42,6 +54,10 @@ class IOMAlerterPlugin(PluginBase, ABC):
     @abstractmethod
     def get_alerter_class(self) -> Type[Alerter]:
         pass
+
+    # noinspection PyMethodMayBeStatic
+    def register_periodic_tasks(self, config) -> List[Tuple[Callable, float]]:
+        return []
 
     @property
     def global_app_config(self):
@@ -226,7 +242,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
                                                               alert, self, operation)[0]
             try:
                 task_specification = self.get_task_specification(alert, operation)
-                task_instance = ALERT_TASK_BY_OPERATION[operation]
+                task_instance = get_alert_task_by_operation(operation)
                 task = task_instance.apply_async(
                     kwargs=dict(alerter_data=self.alerter_data, alert=alert, reason=reason),
                     countdown=round(delay), **task_specification, include_traceback=store_traceback)
