@@ -1,6 +1,8 @@
 FROM python:3.10-slim AS builder
 
 ARG TARGETPLATFORM
+ARG VERSION
+ENV VERSION=${VERSION:-0.2.0}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
@@ -22,7 +24,6 @@ RUN pipenv lock \
 
 # Create packages for iometrics-alerta
 COPY VERSION LICENSE README.md setup*.py /app/
-COPY backend /app/backend/
 COPY iometrics_alerta /app/iometrics_alerta
 
 RUN python -m setup_routing bdist_wheel \
@@ -30,8 +31,8 @@ RUN python -m setup_routing bdist_wheel \
 
 # Install iometrics-alerta
 WORKDIR /
-RUN pip install /app/dist/alerta_routing-1.0.0-py3-none-any.whl \
-    && pip install /app/dist/iometrics_alerta-1.0.0-py3-none-any.whl
+RUN pip install /app/dist/alerta_routing-${VERSION}-py3-none-any.whl \
+    && pip install /app/dist/iometrics_alerta-${VERSION}-py3-none-any.whl
 
 # Cleaning
 RUN apt-get -y purge --auto-remove build-essential \

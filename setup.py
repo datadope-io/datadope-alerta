@@ -27,10 +27,6 @@ setup(
         'alerta.database.backends': 'backend',
         'iometrics_alerta': 'iometrics_alerta'
     },
-    # packages=[
-    #     'alerta.database.backends.flexiblededup',
-    #     'iometrics_alerta',
-    # ] + ['iometrics_alerta.' + x for x in find_packages(exclude=['routing'])],
     packages=find_packages(exclude=['iometrics_alerta.routing']),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',

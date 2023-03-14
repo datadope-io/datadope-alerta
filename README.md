@@ -382,8 +382,10 @@ use specific secrets.
 Once `.env` file si available, docker-compose can be executed from [deployment](deployment) folder using:
 
 ```shell
-docker-compose up -d
+VERSION=$(cat ../VERSION) docker-compose up -d
 ```
+
+
 
 This command will create the following containers:
 * iometrics-alerta-postgres
@@ -397,7 +399,7 @@ This command will create the following containers:
 The number of celery workers to run may be modified using:
 
 ```shell
-docker-compose up -d --scale celery-worker=2
+VERSION=$(cat ../VERSION) docker-compose up -d --scale celery-worker=2
 ```
 
 In this case, 2 celery workers will run.
@@ -419,8 +421,8 @@ Dockerfiles and needed files to build dockers are available in [deployment](depl
 To create the images:
 
 ```shell
-docker build -f deployment/alerta.dockerfile -t iometrics-alerta-server .
-docker build -f deployment/celery.dockerfile -t iometrics-alerta-celery .
+docker build --build-arg VERSION=$(cat VERSION) -f deployment/alerta.dockerfile -t iometrics-alerta-server:$(cat VERSION)  .
+docker build --build-arg VERSION=$(cat VERSION) -f deployment/celery.dockerfile -t iometrics-alerta-celery:$(cat VERSION) .
 docker build -f deployment/webui.dockerfile -t iometrics-alerta-webui .
 ```
 

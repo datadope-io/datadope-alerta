@@ -1,5 +1,5 @@
 # Needs a .env file.
-# A file example.env is provided. MAke a copy as '.env' and modify the values as needed.
+# A file example.env is provided. Make a copy as '.env' and modify the values as needed.
 version: "2.4"
 
 name: iometrics-alerta
@@ -45,10 +45,12 @@ services:
     restart: unless-stopped
 
   server:
-    image: iometrics-alerta/alerta-server
+    image: iometrics-alerta-server:${VERSION}
     build:
       context: ..
       dockerfile: deployment/alerta.dockerfile
+      args:
+        - VERSION=${VERSION}
     container_name: iometrics-alerta-server
     networks:
       alerta:
@@ -61,6 +63,7 @@ services:
       - "8001:8000"
     env_file: .env
     environment:
+      VERSION: ${VERSION}
       PGUSER: "${POSTGRES_USER:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
       DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
@@ -68,10 +71,12 @@ services:
 
 
   webui:
-    image: iometrics-alerta/alerta-webui
+    image: iometrics-alerta-webui
     build:
       context: ..
       dockerfile: deployment/webui.dockerfile
+      args:
+        VERSION: ${VERSION}
     container_name: iometrics-alerta-webui
     networks:
       alerta:
@@ -84,10 +89,12 @@ services:
       ALERTA_SERVER_ENDPOINT: "${ALERTA_SERVER_ENDPOINT:-http://localhost:8001}"
 
   celery-worker:
-    image: iometrics-alerta/celery-worker
+    image: iometrics-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
+      args:
+        VERSION: ${VERSION}
     networks:
       alerta:
     depends_on:
@@ -96,6 +103,7 @@ services:
       - server
     env_file: .env
     environment:
+      VERSION: ${VERSION}
       PGUSER: "${POSTGRES_USER:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
       DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
@@ -106,10 +114,12 @@ services:
       ALERTACLIENT_CONFIGURATION__TIMEOUT: "20.0"
 
   celery-beat:
-    image: iometrics-alerta/celery-worker
+    image: iometrics-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
+      args:
+        VERSION: ${VERSION}
     container_name: iometrics-alerta-celery-beat
     networks:
       alerta:
@@ -120,6 +130,7 @@ services:
     command: entry_point_celery_beat.sh
     env_file: .env
     environment:
+      VERSION: ${VERSION}
       PGUSER: "${POSTGRES_USER:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
       DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
@@ -128,10 +139,12 @@ services:
       ALERTACLIENT_CONFIGURATION__KEY: "${API_KEY}"
 
   celery-flower:
-    image: iometrics-alerta/celery-worker
+    image: iometrics-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
+      args:
+        VERSION: ${VERSION}
     container_name: iometrics-alerta-celery-flower
     networks:
       alerta:
@@ -144,6 +157,7 @@ services:
       - "5555:5555"
     env_file: .env
     environment:
+      VERSION: ${VERSION}
       PGUSER: "${POSTGRES_USER:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
       DATABASE_URL: "flexiblededup://postgres/${POSTGRES_DB:-monitoring}?connect_timeout=10&application_name=alerta"
