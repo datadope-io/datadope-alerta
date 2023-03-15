@@ -21,8 +21,10 @@ def setup_periodic_tasks(sender, **kwargs):
         if getattr(plugin, 'register_periodic_tasks', None):
             with app.app_context():
                 tasks = plugin.register_periodic_tasks(config)
-            for task_class, interval in tasks:
-                sender.add_periodic_task(timedelta(seconds=interval), task_class.s())
+            for task_class, schedule in tasks:
+                if isinstance(schedule, (int, float)):
+                    schedule = timedelta(seconds=schedule)
+                sender.add_periodic_task(schedule, task_class.s())
 
 
 class ClientTask(celery.Task):
