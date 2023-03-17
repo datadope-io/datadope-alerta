@@ -25,7 +25,7 @@ with the alert information. This value will be used only if alert doesn't provid
 For example:
 `DEFAULT_DEDUPLICATION_TEMPLATE = '{{ alert.id }}'` => means no deduplication by attribute by default as each
 alert has a different id. Only alerts providing `deduplication` attribute may deduplicate. 
-(The same behavior is obtained if no ´DEFAULT_DEDUPLICATION_TEMPLATE` property is configured).
+(The same behavior is obtained if no `DEFAULT_DEDUPLICATION_TEMPLATE` property is configured).
 
 `DEFAULT_DEDUPLICATION_TEMPLATE = '{{ alert.environment }}-{{ alert.resource }}-{{ alert.event }}'` will 
 provide a deduplication similar to the Alerta original deduplication
@@ -86,19 +86,19 @@ launched.
 
 ## Special attribute list
 
-| Attribute         | Type                  | Scope   | Meaning                                                        |
-|-------------------|-----------------------|---------|----------------------------------------------------------------|
-| deduplication     | string                | Global  |                                                                |
-| deduplicationType | 'both' or 'attribute' | Global  |                                                                |
-| alerters          | list \ json           | Global  |                                                                |
-| eventTags         | dict \ json           | Global  |                                                                |
-| autoCloseAt       | datetime              | Global  |                                                                |
-| autoCloseAfter    | float (seconds)       | Global  | Fills / replaces `autoCloseAt` with last_received_time + value |
-| ignoreRecovery    | bool                  | Alerter |                                                                |
-| actionDelay       | float                 | Alerter |                                                                | 
-| tasksDefinition   | dict \ json           | Alerter |                                                                |
-| repeatMinInterval | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event   |
-| recoveryActions   | dict \ json           | Global  | Recovery actions definition                                    |
+| Attribute               | Type                  | Scope   | Meaning                                                                                          |
+|-------------------------|-----------------------|---------|--------------------------------------------------------------------------------------------------|
+| deduplication           | string                | Global  |                                                                                                  |
+| deduplicationType       | 'both' or 'attribute' | Global  |                                                                                                  |
+| alerters                | list \ json           | Global  |                                                                                                  |
+| eventTags               | dict \ json           | Global  |                                                                                                  |
+| autoCloseAt             | datetime              | Global  |                                                                                                  |
+| autoCloseAfter          | float (seconds)       | Global  | Fills / replaces `autoCloseAt` with last_received_time + value                                   |
+| ignoreRecovery          | bool                  | Alerter |                                                                                                  |
+| actionDelay             | float                 | Alerter |                                                                                                  | 
+| tasksDefinition         | dict \ json           | Alerter |                                                                                                  |
+| repeatMinInterval       | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event                                     |
+| recoveryActions         | dict \ json           | Global  | Recovery actions definition                                                                      |
 
 Scope 'Alerter' means that the attribute value may be defined specifically for every alerter 
 while 'Global' means that the same value will be used independently of the alerter.
@@ -385,8 +385,6 @@ Once `.env` file si available, docker-compose can be executed from [deployment](
 VERSION=$(cat ../VERSION) docker-compose up -d
 ```
 
-
-
 This command will create the following containers:
 * iometrics-alerta-postgres
 * iometrics-alerta-redis
@@ -405,7 +403,7 @@ VERSION=$(cat ../VERSION) docker-compose up -d --scale celery-worker=2
 In this case, 2 celery workers will run.
 
 Default configuration for alerta and celery environments is obtained from [config_example/alertad.conf](config_example/alertad.conf).
-Most of the configuration may be overriden using environment vars in [deployment/.env](deployment/.env) file.
+Most of the configuration may be overriden using environment vars. An example of environment file is located at [deployment/example.env](deployment/example.env) file.
 
 ### Installation using dockers
 
@@ -501,13 +499,15 @@ Steps order:
   6. From default value if provided.
 
 If the value obtained if a dict and an operation is provided, returned value will be the one
-related to the operation. The keys for the dictionary should be the values of ALERTERS_TASK_BY_OPERATION
+related to the operation. The keys for the dictionary should be the values of [ALERTERS_KEY_BY_OPERATION](iometrics_alerta/__init__.py)
 for each operation:
 
 ```python
-ALERTERS_TASK_BY_OPERATION = {
+ALERTERS_KEY_BY_OPERATION = {
     'process_event': 'new',
-    'process_recovery': 'recovery'
+    'process_recovery': 'recovery',
+    'process_repeat': 'repeat',
+    'process_action': 'action'
 }
 ```
 

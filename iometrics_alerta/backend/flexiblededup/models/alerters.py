@@ -7,6 +7,7 @@ class AlerterOperationData:
 
     FIELD_TASK_CHAIN_INFO_TEXT = 'text'
     FIELD_TASK_CHAIN_INFO_TASK_DEF = 'task_def'
+    FIELD_TASK_CHAIN_INFO_ACTION = 'action'
 
     @classmethod
     def get_db(cls):
@@ -62,8 +63,16 @@ class AlerterOperationData:
         data = cls.from_db(alert_id, alerter, 'new', create_default=False)
         return (data is not None) and (data.success is True)
 
+    @classmethod
+    def last_executing_operation(cls, alert_id, alerter) -> Optional['AlerterOperationData']:
+        return cls.get_db().get_last_executing_operation(alert_id, alerter)
+
     def store(self):
         if self.id is None:
             return self.get_db().create_alerter_data(self)
         else:
             return self.get_db().update_alerter_data(self)
+
+    @classmethod
+    def clear(cls, alert_id):
+        cls.get_db().clear_alerters_data(alert_id)

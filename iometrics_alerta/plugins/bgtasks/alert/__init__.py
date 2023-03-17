@@ -1,7 +1,7 @@
 import random
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Optional, Any, Dict, Tuple, Union
+from typing import Optional
 
 # noinspection PyPackageRequirements
 from celery.utils.time import get_exponential_backoff_interval
@@ -12,7 +12,7 @@ from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
 from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException
-from .. import app, celery, getLogger, Alert, prepare_result, result_for_exception
+from .. import app, celery, getLogger, Alert
 # noinspection PyUnresolvedReferences
 from .. import revoke_task  # To provide import to package modules
 
@@ -21,6 +21,7 @@ class AlertTask(celery.Task, ABC):
     ignore_result = True
     _time_management = {}
     _recovery_task = None
+    _action_task = None
 
     def __init__(self):
         super().__init__()
@@ -30,10 +31,6 @@ class AlertTask(celery.Task, ABC):
     @abstractmethod
     def get_operation() -> str:
         pass
-
-    @classmethod
-    def get_operation_key(cls) -> str:
-        return ALERTERS_KEY_BY_OPERATION[cls.get_operation()]
 
     @abstractmethod
     def before_start_operation(self, task_id, alerter_operation_data: AlerterOperationData,
@@ -68,11 +65,18 @@ class AlertTask(celery.Task, ABC):
         pass
 
     @classmethod
-    def get_recovery_task(cls):
+    def get_recovery_task(cls) -> 'RecoveryTask':
         if cls._recovery_task is None:
             from .. import recovery_task
             cls._recovery_task = recovery_task
         return cls._recovery_task
+
+    @classmethod
+    def get_action_task(cls) -> 'ActionTask':
+        if cls._action_task is None:
+            from .. import action_task
+            cls._action_task = action_task
+        return cls._action_task
 
     @staticmethod
     def get_retry_parameters(retry_number, retry_data):
@@ -106,10 +110,12 @@ class AlertTask(celery.Task, ABC):
     def _get_parameters(cls, kwargs):  # task_id null for intermediate requests => begin time is not popped
         alerter_data = kwargs['alerter_data']
         alert = kwargs['alert']
+        action_ = kwargs.get('action')
         alerter_name = alerter_data[BGTadC.NAME]
         alert_id = alert['id']
         operation = cls.get_operation()
-        return alert_id, alerter_name, operation, ALERTERS_KEY_BY_OPERATION[operation]
+        operation_key = action_ or ALERTERS_KEY_BY_OPERATION[operation]
+        return alert_id, alerter_name, operation, operation_key
 
     @classmethod
     def _get_timing_from_now(cls, task_id):
@@ -127,13 +133,6 @@ class AlertTask(celery.Task, ABC):
         return begin, now, duration
 
     @classmethod
-    def _prepare_result(cls, alerter_operation_data, retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
-                        start_time: datetime = None, end_time: datetime = None,
-                        skipped: bool = None, retries: int = None):
-        return prepare_result(alerter_operation_data, retval, start_time, end_time,
-                              skipped, retries)
-
-    @classmethod
     def _update_alerter_db_info(cls, status: AlerterStatus,
                                 alerter_operation_data: AlerterOperationData):
         alerter_operation_data.task_chain_info = None
@@ -148,9 +147,9 @@ class AlertTask(celery.Task, ABC):
             duration = DateTime.diff_seconds_utc(end_time, start_time)
         else:
             duration = 0.0
-        alerter_operation_data = self._prepare_result(alerter_operation_data=alerter_operation_data, retval=retval,
-                                                      start_time=start_time, end_time=end_time,
-                                                      retries=self.request.retries)
+        alerter_operation_data = Alerter.prepare_result(alerter_operation_data=alerter_operation_data, retval=retval,
+                                                        start_time=start_time, end_time=end_time,
+                                                        retries=self.request.retries)
         self.logger.info("PROCESS FINISHED IN %.3f sec. RESULT %s -> %s",
                          duration, 'SUCCESS' if alerter_operation_data.success else 'FAILURE', retval)
         self._update_alerter_db_info(status, alerter_operation_data)
@@ -187,7 +186,7 @@ class AlertTask(celery.Task, ABC):
             start_time, end_time, duration = self._get_timing_from_now(task_id)
             with app.app_context():
                 current_status = AlerterStatus.from_db(alert_id, alerter_name)
-                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, operation_key)
                 next_status = self.on_success_operation(alerter_operation_data, current_status, kwargs)
                 self._finish_task(alerter_operation_data=alerter_operation_data, status=next_status, retval=retval,
                                   start_time=start_time, end_time=end_time)
@@ -197,12 +196,12 @@ class AlertTask(celery.Task, ABC):
     def on_failure(self, exc, task_id, args, kwargs, einfo):  # noqa
         try:
             include_traceback = self.request.properties.get('include_traceback', False)
-            retval = False, result_for_exception(exc, einfo, include_traceback=include_traceback)
+            retval = False, Alerter.result_for_exception(exc, einfo, include_traceback=include_traceback)
             alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
             start_time, end_time, duration = self._get_timing_from_now(task_id)
             with app.app_context():
                 current_status = AlerterStatus.from_db(alert_id, alerter_name)
-                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+                alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, operation_key)
                 next_status = self.on_failure_operation(task_id=task_id, alerter_operation_data=alerter_operation_data,
                                                         current_status=current_status, retval=retval, kwargs=kwargs)
                 if next_status:
@@ -215,7 +214,7 @@ class AlertTask(celery.Task, ABC):
         alert_id, alerter_name, operation, operation_key = self._get_parameters(kwargs)
         with app.app_context():
             current_status = AlerterStatus.from_db(alert_id, alerter_name)
-            alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, self.get_operation_key())
+            alerter_operation_data = AlerterOperationData.from_db(alert_id, alerter_name, operation_key)
             should_retry = self.on_retry_operation(task_id=task_id, alerter_operation_data=alerter_operation_data,
                                                    current_status=current_status,
                                                    exc=exc, einfo=einfo, kwargs=kwargs)
@@ -226,17 +225,21 @@ class AlertTask(celery.Task, ABC):
         else:
             revoke_task(task_id)
 
-    def run(self, alerter_data: dict, alert: dict, reason: Optional[str]):
+    # noinspection PyShadowingNames
+    def run(self, alerter_data: dict, alert: dict, reason: Optional[str], action: str = None):
         alerter = self._get_alerter(alerter_data, self)
         operation = self.get_operation()
-        operation_key = self.get_operation_key()
+        operation_key = action or ALERTERS_KEY_BY_OPERATION[operation]
         self.logger.info("Running background task")
         bg_timer = Timer('alerters', f"{alerter.name}_{operation_key}",
                          f"{alerter.name} {operation_key}",
                          f"Total time and number of alerter {alerter.name} operation {operation_key}")
         ts = bg_timer.start_timer()
         try:
-            response = getattr(alerter, operation)(Alert.parse(alert), reason)
+            parameters = [Alert.parse(alert), reason]
+            if action:
+                parameters.append(action)
+            response = getattr(alerter, operation)(*parameters)
             return response
         except (RetryableException, ConnectionError, RequestsConnectionError, RequestsTimeout) as e:
             retry_data = self.request.properties.get('retry_spec')
@@ -264,3 +267,7 @@ celery.register_task(recovery_task)
 from .repeat import Task as RepeatTask  # noqa
 repeat_task = RepeatTask()
 celery.register_task(repeat_task)
+
+from .action import Task as ActionTask  # noqa
+action_task = ActionTask()
+celery.register_task(action_task)

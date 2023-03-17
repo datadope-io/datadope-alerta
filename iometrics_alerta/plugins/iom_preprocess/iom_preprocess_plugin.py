@@ -4,16 +4,28 @@ from typing import Optional, Any
 import pytz
 
 from alerta.models.alert import Alert
+from alerta.models.enums import Action
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime, thread_local
 from iometrics_alerta import NormalizedDictView, safe_convert
-from iometrics_alerta.plugins import getLogger
+from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
+from iometrics_alerta.plugins import getLogger, AlerterStatus
 
 logger = getLogger(__name__)
 
 
 class IOMAPreprocessPlugin(PluginBase):
+
+    def __init__(self, name=None):
+        super().__init__(name=name)
+        self.__resolve_action_name = None
+
+    @property
+    def resolve_action_name(self):
+        if not self.__resolve_action_name:
+            self.__resolve_action_name = CConfig.get_global_configuration(GAttr.CONDITION_RESOLVED_ACTION_NAME)
+        return self.__resolve_action_name
 
     @staticmethod
     def adapt_event_tags(alert_attributes: NormalizedDictView):
@@ -53,7 +65,7 @@ class IOMAPreprocessPlugin(PluginBase):
 
     @staticmethod
     def adapt_recovery_actions(alert, alert_attributes, config):
-        # TODO: Adjust Zabbix task a new recoveryAction Attribute
+        # TODO: Adjust Zabbix task to new recoveryAction Attribute
         #
         # limit = tags[HOST.HOST]
         # extra_vars = {x[prefix_len:]: y for x, y in iteritems(tags) if x.startswith(TAG_AWX_EXTRAVARS_PREFIX)}
@@ -85,7 +97,29 @@ class IOMAPreprocessPlugin(PluginBase):
         return None
 
     def take_action(self, alert: 'Alert', action: str, text: str, **kwargs) -> Any:
-        return None
+        """
+        Manage Condition Resolved iometrics custom action and reopen alert
+        """
+        thread_local.alert_id = alert.id
+        thread_local.alerter_name = 'iom_preprocess'
+        thread_local.operation = action
+        try:
+            resolve_action_name = self.resolve_action_name
+            if action == resolve_action_name:
+                must_close = CConfig.get_global_attribute_value(GAttr.CONDITION_RESOLVED_MUST_CLOSE,
+                                                                alert=alert)
+                alert.tags.append(CConfig.get_global_configuration(GAttr.CONDITION_RESOLVED_TAG))
+                alert.update_tags(alert.tags)  # FIXME: Needed until bug in main plugin loop is solved
+                if must_close:
+                    return alert, Action.CLOSE, text, kwargs.get('timeout')
+            elif action == Action.OPEN:
+                logger.warning("Reopening alert. Removing alerter information")
+                AlerterStatus.clear(alert_id=alert.id)
+                AlerterOperationData.clear(alert_id=alert.id)
+            return None
+        finally:
+            thread_local.alerter_name = None
+            thread_local.operation = None
 
     def take_note(self, alert: 'Alert', text: Optional[str], **kwargs) -> Any:
         return None

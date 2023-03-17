@@ -13,8 +13,7 @@ from alertaclient.api import Client as AlertaClient  # To provide import for pac
 
 from iometrics_alerta import initialize, is_initialized
 from iometrics_alerta.plugins import getLogger
-# noinspection PyUnresolvedReferences
-from iometrics_alerta.plugins import prepare_result, result_for_exception
+
 
 if not is_initialized():
     app = create_app()
@@ -38,4 +37,4 @@ from .periodic_tasks import check_automatic_closing # noqa - To provide import f
 from .recovery_actions import launch_actions  # noqa - To provide import for package modules
 
 # Tasks defined as classes must be instantiated and registered
-from .alert import event_task, recovery_task, repeat_task # noqa - To provide import for package modules
+from .alert import event_task, recovery_task, repeat_task, action_task  # noqa - To provide import for package modules
