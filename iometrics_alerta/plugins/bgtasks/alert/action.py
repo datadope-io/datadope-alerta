@@ -28,33 +28,33 @@ class Task(AlertTask):
 
     @staticmethod
     def get_operation():
-        return Alerter.process_repeat.__name__
+        return Alerter.process_action.__name__
 
     def before_start_operation(self, task_id, alerter_operation_data, current_status, kwargs):
         is_retrying = self.request.retries > 0
         if current_status == AlerterStatus.Recovering:
-            self.logger.info("Ignoring repeat task -> Alert recovered before repeating. Recovering")
+            self.logger.info("Ignoring action task -> Alert recovered before action. Recovering")
             alert = Alert.find_by_id(alerter_operation_data.alert_id)
             self._time_management.pop(task_id, None)
             start_time, end_time, duration = self._get_timing_from_now(task_id=task_id)
-            event_retval = not is_retrying, {"info": {"message": "RECOVERED BEFORE ALERTING"}}
+            event_retval = not is_retrying, {"info": {"message": "RECOVERED BEFORE ACTION"}}
             self._schedule_recovery_task(alert, alerter_operation_data, kwargs)
             self._finish_task(alerter_operation_data=alerter_operation_data, status=current_status,
                               retval=event_retval, start_time=start_time, end_time=end_time)
             self.update_state(state=states.IGNORED)
             raise Ignore()
-        elif current_status not in (AlerterStatus.Repeating, AlerterStatus.Actioning):
-            self.logger.warning("Ignoring repeat task -> Current status is not valid for this task: %s",
+        elif current_status not in (AlerterStatus.Actioning, AlerterStatus.Repeating):
+            self.logger.warning("Ignoring action task -> Current status is not valid for this task: %s",
                                 current_status.value)
             self._time_management.pop(task_id, None)
             self.update_state(state=states.IGNORED)
             raise Ignore()
-        return AlerterStatus.Repeating
+        return AlerterStatus.Actioning
 
     def on_success_operation(self, alerter_operation_data: AlerterOperationData, current_status, kwargs):
         if current_status == AlerterStatus.Recovering:
             alert = Alert.find_by_id(alerter_operation_data.alert_id)
-            self.logger.info("Alert recovered during repeating. Sending recovery from repeat task")
+            self.logger.info("Alert recovered during action. Sending recovery from repeat task")
             self._schedule_recovery_task(alert, alerter_operation_data, kwargs)
             return AlerterStatus.Recovering
         return AlerterStatus.Processed
@@ -64,7 +64,7 @@ class Task(AlertTask):
         if current_status == AlerterStatus.Recovering:
             # Recovered while processing. Ignoring recovery
             alert = Alert.find_by_id(alerter_operation_data.alert_id)
-            self.logger.info("Alert recovered and repeating failed. Sending recovery from repeat")
+            self.logger.info("Alert recovered and action failed. Sending recovery from repeat")
             self._schedule_recovery_task(alert, alerter_operation_data, kwargs)
             return AlerterStatus.Recovering
         return AlerterStatus.Processed
@@ -72,7 +72,7 @@ class Task(AlertTask):
     def on_retry_operation(self, task_id, alerter_operation_data, current_status, exc, einfo, kwargs):
         if current_status == AlerterStatus.Recovering:
             alert = Alert.find_by_id(alerter_operation_data.alert_id)
-            self.logger.info("Alert recovered before launching a repeat retry. "
+            self.logger.info("Alert recovered before launching an action retry. "
                              "Cancelling retry and sending recovery")
             include_traceback = self.request.properties.get('include_traceback', False)
             retval = False, Alerter.result_for_exception(exc, einfo, include_traceback=include_traceback)

@@ -242,11 +242,14 @@ CREATE TABLE IF NOT EXISTS recovery_action_data (
     CONSTRAINT recovery_action_data_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS alerter_data_oper_key ON alerter_data
-USING btree (alert_id, alerter, operation) WHERE operation <> 'repeat';
+CREATE UNIQUE INDEX IF NOT EXISTS alerter_data_oper_key_unique ON alerter_data
+USING btree (alert_id, alerter, operation) WHERE operation in ('new', 'recovery');
 
 CREATE INDEX IF NOT EXISTS alerter_data_oper_key ON alerter_data
-USING btree (alert_id, alerter, operation) WHERE operation = 'repeat';
+USING btree (alert_id, alerter, operation) WHERE operation not in ('new', 'recovery');
+
+CREATE INDEX IF NOT EXISTS alerter_data_key ON alerter_data
+USING btree (alert_id, alerter);
 
 CREATE TABLE IF NOT EXISTS key_value_store (
     key VARCHAR(50) NOT NULL PRIMARY KEY,

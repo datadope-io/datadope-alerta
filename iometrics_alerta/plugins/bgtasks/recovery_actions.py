@@ -14,7 +14,7 @@ from alerta.models.enums import Status
 from iometrics_alerta import DateTime, RecoveryActionsFields, thread_local
 from iometrics_alerta import GlobalAttributes
 from iometrics_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionData, RecoveryActionsStatus
-from iometrics_alerta.plugins import RetryableException, result_for_exception
+from iometrics_alerta.plugins import Alerter, RetryableException
 from . import app, celery, getLogger, Alert
 from . import revoke_task  # noqa - Provide import to other classes
 from ..recovery_actions.providers import RecoveryActionsProvider, RecoveryActionsResponseStatus, RecoveryActionsResponse
@@ -310,7 +310,7 @@ def fill_result(recovery_action_data: RecoveryActionData,
     recovery_action_data.start_time = recovery_action_data.start_time or begin
     if isinstance(response, Exception) and response.args and isinstance(response.args[0], RecoveryActionsResponse):
         response = response.args[0]
-    response_data, success = (result_for_exception(exc=response), False) if isinstance(response, Exception) \
+    response_data, success = (Alerter.result_for_exception(exc=response), False) if isinstance(response, Exception) \
         else (response.response_data, response.status == RecoveryActionsResponseStatus.RESPONSE_OK)
     recovery_action_data.status = status
     recovery_action_data.end_time = end

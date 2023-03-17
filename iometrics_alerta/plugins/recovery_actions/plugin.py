@@ -4,7 +4,7 @@ from typing import Optional, Any
 from pkg_resources import iter_entry_points
 
 from alerta.models.alert import Alert
-from alerta.models.enums import Status
+from alerta.models.enums import Status, Action
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import DateTime, NormalizedDictView, ContextualConfiguration as CConfig, safe_convert, \
@@ -89,9 +89,6 @@ class RecoveryActionsPlugin(PluginBase):
             alert_attributes[recovery_actions_key] = recovery_actions_config
         thread_local.alerter_name = None
         return alert
-
-    def take_action(self, alert: 'Alert', action: str, text: str, **kwargs) -> Any:
-        pass
 
     def take_note(self, alert: 'Alert', text: Optional[str], **kwargs) -> Any:
         pass
@@ -188,3 +185,28 @@ class RecoveryActionsPlugin(PluginBase):
         finally:
             thread_local.alerter_name = None
             thread_local.operation = None
+
+    def take_action(self, alert: 'Alert', action: str, text: str, **kwargs) -> Any:
+        """
+        If action is the one configured as "condition resolved" and operation
+        is still processing recovery actions or waiting to close, consider that the
+        action is a 'close' action.
+
+        """
+        if action != Action.CLOSE and alert.status not in (Status.Closed, Status.Expired):
+            close_action = CConfig.get_global_attribute_value(
+                GlobalAttributes.CONDITION_RESOLVED_ACTION_NAME, alert)
+            if action == close_action:
+                recovery_actions_config = alert.attributes.get(GlobalAttributes.RECOVERY_ACTIONS.var_name, {})
+                actions = recovery_actions_config.get(RAConfigFields.ACTIONS.var_name)
+                if not actions:
+                    # If not actions => routing is in charge of invoking alerters
+                    return None
+                recovery_actions_data = RecoveryActionData.from_db(alert_id=alert.id)
+                ra_status = None if recovery_actions_data is None else recovery_actions_data.status
+                if ra_status and ra_status != RecoveryActionsStatus.Finished:
+                    return alert, Action.CLOSE, text, kwargs.get('timeout')
+        return None
+
+
+

@@ -23,16 +23,13 @@ setup(
     license='GPLv3',
     author='Victor Garcia',
     author_email='victor.garcia@datadope.io',
-    package_dir={
-        'alerta.database.backends': 'backend',
-        'iometrics_alerta': 'iometrics_alerta'
-    },
     packages=find_packages(exclude=['iometrics_alerta.routing']),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
         'requests',
         'celery[redis]~=5.2.7'
     ],
+    package_data={'': ['*.sql']},
     include_package_data=True,
     zip_safe=False,
     classifiers=[

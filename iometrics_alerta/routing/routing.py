@@ -49,80 +49,95 @@ def initialize_plugins(plugins_object, config):
 def rules(alert, plugins, config):  # noqa
     thread_local.alert_id = alert.id
     thread_local.alerter_name = 'routing'
-    global _plain_plugins, _alerters_plugins
-    if _plain_plugins is None:
-        _plain_plugins, _alerters_plugins = initialize_plugins(plugins, config)
+    try:
+        global _plain_plugins, _alerters_plugins
+        if _plain_plugins is None:
+            _plain_plugins, _alerters_plugins = initialize_plugins(plugins, config)
 
-    result = _plain_plugins.copy()
+        result = _plain_plugins.copy()
 
-    stack = inspect.stack()
-    routing_request = stack[2].function if len(stack) > 2 else None
-    if routing_request == 'process_action':
-        # actions not manage by iometrics plugins -> manage through status change
-        return [plugins[x] for x in result]
+        stack = inspect.stack()
+        routing_request = stack[2].function if len(stack) > 2 else None
+        thread_local.operation = routing_request
 
-    if alert.status in (Status.Blackout, Status.Expired):
-        # Alerters and recovery actions are not executed during blackout or if expired
-        return [plugins[x] for x in result]
-
-    alert_attributes = NormalizedDictView(alert.attributes)
-    alerters = ContextualConfiguration.get_global_attribute_value(GAttr.ALERTERS, alert,
-                                                                  global_config=config)
-
-    recovery_actions_config = alert_attributes.get(GAttr.RECOVERY_ACTIONS.var_name)
-    if recovery_actions_config and isinstance(recovery_actions_config, dict) \
-            and recovery_actions_config.get(RecoveryActionsFields.ACTIONS.var_name):
-        recovery_action_data = RecoveryActionData.from_db(alert_id=alert.id)
-        ra_status = None if recovery_action_data is None else recovery_action_data.status
-        if routing_request == 'process_status':
-            # status change managed by the plugin
-            result.append(_recovery_actions_plugin)
+        if alert.status in (Status.Blackout, Status.Expired):
+            # Alerters and recovery actions are not executed during blackout or if expired
+            logger.debug("Ignoring alerters for blackout or expired alerts")
             return [plugins[x] for x in result]
-        if alert.status != Status.Closed:
-            if ra_status:
-                # Recovery actions already active/executed. Do not involve alerters or recovery action plugin
-                return [plugins[x] for x in result]
-            else:
-                # Recovery actions not launched yet. Only involve recovery action plugin
+
+        alert_attributes = NormalizedDictView(alert.attributes)
+        alerters = ContextualConfiguration.get_global_attribute_value(GAttr.ALERTERS, alert,
+                                                                      global_config=config)
+
+        recovery_actions_config = alert_attributes.get(GAttr.RECOVERY_ACTIONS.var_name)
+        if recovery_actions_config and isinstance(recovery_actions_config, dict) \
+                and recovery_actions_config.get(RecoveryActionsFields.ACTIONS.var_name):
+            recovery_action_data = RecoveryActionData.from_db(alert_id=alert.id)
+            ra_status = None if recovery_action_data is None else recovery_action_data.status
+            if routing_request == 'process_status':
+                # status change managed by the plugin
                 result.append(_recovery_actions_plugin)
+                logger.debug("Ignoring alerters. Managed by recovery_actions plugin")
                 return [plugins[x] for x in result]
+            if alert.status != Status.Closed:
+                if ra_status:
+                    # Recovery actions already active/executed. Do not involve alerters or recovery action plugin
+                    logger.debug("Ignoring alerters. Executing recovering actions")
+                    return [plugins[x] for x in result]
+                else:
+                    # Recovery actions not launched yet. Only involve recovery action plugin
+                    result.append(_recovery_actions_plugin)
+                    logger.debug("Ignoring alerters. Waiting to execute recovery actions.")
+                    return [plugins[x] for x in result]
 
-    # Include recovery actions plugin if exists to ensure pre_receive is called.
-    # pre_receive must ensure recoveryActions attribute will be formed properly so routing
-    # can check it to decide post_receive plugins.
-    # post_receive method of recovery actions plugin must do nothing
-    # if no recovery action is configured for the alert as
-    # it is going to be invoked even if no recovery actions are configured.
-    if alert.status != Status.Closed and _recovery_actions_plugin:
-        result.append(_recovery_actions_plugin)
+        # Include recovery actions plugin if exists to ensure pre_receive is called.
+        # pre_receive must ensure recoveryActions attribute will be formed properly so routing
+        # can check it to decide post_receive plugins.
+        # post_receive method of recovery actions plugin must do nothing
+        # if no recovery action is configured for the alert as
+        # it is going to be invoked even if no recovery actions are configured.
+        if alert.status != Status.Closed and _recovery_actions_plugin:
+            result.append(_recovery_actions_plugin)
 
-    if alerters:
-        for alerter in alerters:
-            if alerter == ALERTER_IGNORE:
-                continue
-            if alerter in plugins:
-                if routing_request == 'process_status':
-                    # status change managed by the plugin
+        if alerters:
+            for alerter in alerters:
+                if alerter == ALERTER_IGNORE:
+                    continue
+                if alerter in plugins:
+                    if routing_request == 'process_status':
+                        # status change managed by the plugin
+                        result.append(alerter)
+                        continue
+                    alerter_name = getattr(plugins[alerter], 'alerter_name',
+                                           plugins[alerter].name.replace('.', '_').replace('$', '_'))
+                    alerter_status = AlerterStatus.from_db(alert_id=alert.id, alerter_name=alerter_name)
+                    if alerter_status in (AlerterStatus.Recovered, AlerterStatus.Recovering):
+                        # If alerter has already managed the recovery: ignore
+                        logger.info("Alerter %s already sent recovery for '%s'", alerter, alert)
+                        continue
+                    if routing_request != 'process_action' \
+                            and alerter_status not in (AlerterStatus.New, AlerterStatus.Processed) \
+                            and alert.status != Status.Closed:
+                        # If alerter is processing the alert and alert is not closed: ignore
+                        logger.info("Alerter %s already sent '%s'", alerter, alert)
+                        continue
+                    if routing_request == 'process_action' \
+                            and alerter_status in (AlerterStatus.Recovering, AlerterStatus.Recovered):
+                        # If alerter is processing the alert and alert is not closed: ignore
+                        logger.info("Action processing is ignored in recovered alerter '%s' for alert '%s'",
+                                    alerter, alert)
+                        continue
+                    if alerter_status == AlerterStatus.New and alert.status == Status.Closed:
+                        # If alert is closed before start processing: ignore
+                        logger.debug("Alerter %s received recovery before start processing '%s'", alerter, alert)
+                        continue
                     result.append(alerter)
-                    continue
-                alerter_name = getattr(plugins[alerter], 'alerter_name',
-                                       plugins[alerter].name.replace('.', '_').replace('$', '_'))
-                alerter_status = AlerterStatus.from_db(alert_id=alert.id, alerter_name=alerter_name)
-                if alerter_status in (AlerterStatus.Recovered, AlerterStatus.Recovering):
-                    # If alerter has already managed the recovery: ignore
-                    logger.info("Alerter %s already sent recovery for '%s'", alerter, alert)
-                    continue
-                if alerter_status not in (AlerterStatus.New, AlerterStatus.Processed) and alert.status != Status.Closed:
-                    # If alerter is processing the alert and alert is not closed: ignore
-                    logger.info("Alerter %s already sent '%s'", alerter, alert)
-                    continue
-                if alerter_status == AlerterStatus.New and alert.status == Status.Closed:
-                    # If alert is closed before start processing: ignore
-                    logger.debug("Alerter %s received recovery before start processing '%s'", alerter, alert)
-                    continue
-                result.append(alerter)
-            else:
-                logger.warning("Plugin for alerter %s not configured. Check 'PLUGINS' configuration variable.", alerter)
-    else:
-        logger.info("No alerter configured in attribute '%s'", GAttr.ALERTERS.var_name)
-    return [plugins[x] for x in result]
+                else:
+                    logger.warning("Plugin for alerter %s not configured. Check 'PLUGINS' configuration variable.",
+                                   alerter)
+        else:
+            logger.info("No alerter configured in attribute '%s'", GAttr.ALERTERS.var_name)
+        logger.debug("Returning plugins: %s", result)
+        return [plugins[x] for x in result]
+    finally:
+        thread_local.alerter_name = None
