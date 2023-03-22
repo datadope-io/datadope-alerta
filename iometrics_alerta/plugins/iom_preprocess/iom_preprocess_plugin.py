@@ -111,6 +111,8 @@ class IOMAPreprocessPlugin(PluginBase):
                 alert.tags.append(CConfig.get_global_configuration(GAttr.CONDITION_RESOLVED_TAG))
                 alert.update_tags(alert.tags)  # FIXME: Needed until bug in main plugin loop is solved
                 if must_close:
+                    logger.info("Closing alert on a resolve action as '%s' tag is active",
+                                GAttr.CONDITION_RESOLVED_MUST_CLOSE.var_name)
                     return alert, Action.CLOSE, text, kwargs.get('timeout')
             elif action == Action.OPEN:
                 logger.warning("Reopening alert. Removing alerter information")

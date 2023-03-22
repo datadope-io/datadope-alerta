@@ -22,6 +22,12 @@ from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperat
 
 def getLogger(name):  # noqa
     filter_ = AlertIdFilter.get_instance()
+    partial = name
+    partial, _, end = partial.rpartition('.')
+    while partial:
+        tmp = get_task_logger(partial)
+        tmp.addFilter(filter_)
+        partial, _, end = partial.rpartition('.')
     logger_ = get_task_logger(name)
     logger_.addFilter(filter_)
     return logger_
