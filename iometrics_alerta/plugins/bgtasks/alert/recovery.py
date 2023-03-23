@@ -1,3 +1,4 @@
+from iometrics_alerta import ALERTERS_KEY_BY_OPERATION
 from . import Alerter, AlerterStatus, AlertTask
 
 # noinspection PyPackageRequirements
@@ -11,6 +12,10 @@ class Task(AlertTask):
     @staticmethod
     def get_operation():
         return Alerter.process_recovery.__name__
+
+    @classmethod
+    def get_operation_key(cls):
+        return ALERTERS_KEY_BY_OPERATION[cls.get_operation()]
 
     def before_start_operation(self, task_id, alerter_operation_data, current_status, kwargs):
         if current_status != AlerterStatus.Recovering:

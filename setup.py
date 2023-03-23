@@ -12,7 +12,6 @@ try:
     remove_tree('build')
 except:  # noqa
     pass
-
 setup(
     name="iometrics-alerta",
     version=read('VERSION'),
@@ -23,16 +22,13 @@ setup(
     license='GPLv3',
     author='Victor Garcia',
     author_email='victor.garcia@datadope.io',
-    package_dir={
-        'alerta.database.backends': 'backend',
-        'iometrics_alerta': 'iometrics_alerta'
-    },
     packages=find_packages(exclude=['iometrics_alerta.routing']),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
         'requests',
         'celery[redis]~=5.2.7'
     ],
+    package_data={'': ['*.sql']},
     include_package_data=True,
     zip_safe=False,
     classifiers=[
@@ -60,6 +56,7 @@ setup(
             'email = iometrics_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = iometrics_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'test = iometrics_alerta.plugins.test.test_plugin:TestPlugin',
+            'gchat = iometrics_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
         ],
         'alerta.recovery_actions.providers': [
             'awx = iometrics_alerta.plugins.recovery_actions.providers.awx:Provider',
@@ -67,3 +64,4 @@ setup(
         ]
     }
 )
+

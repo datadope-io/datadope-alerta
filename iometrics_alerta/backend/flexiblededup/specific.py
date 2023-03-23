@@ -19,7 +19,9 @@ class SpecificBackend:
     def __init__(self, db_backend: Backend):
         self.backend = db_backend
 
+    # ---------------------
     # Alerters Status
+    # ---------------------
 
     def get_status(self, alert_id: str, alerter: str) -> Optional[str]:
         query = """
@@ -52,7 +54,16 @@ class SpecificBackend:
                                          returning=True)
         return record.status if record else None
 
+    def clear_status(self, alert_id: str):
+        delete = """
+            DELETE FROM alerter_status
+             WHERE alert_id=%(alert_id)s
+        """
+        self.backend._deleteall(delete, dict(alert_id=alert_id))
+
+    # -----------------------
     # Alerters Data
+    # -----------------------
 
     def get_alerter_data(self, alert_id: str, alerter: str, operation: str) -> Optional[AlerterOperationData]:
         query = """
@@ -92,7 +103,31 @@ class SpecificBackend:
         record = self.backend._updateone(update, vars(alerter_data), returning=True)
         return AlerterOperationData.from_record(record) if record else None
 
+    def get_last_executing_operation(self, alert_id: str, alerter: str) -> Optional[AlerterOperationData]:
+        query = """
+            SELECT *
+              FROM alerter_data
+             WHERE alert_id=%(alert_id)s
+               AND alerter=%(alerter)s
+               AND operation <> 'recovery'
+               AND received_time IS NOT NULL
+               AND end_time IS NULL
+             ORDER BY received_time DESC
+             LIMIT 1
+        """
+        record = self.backend._fetchone(query, dict(alert_id=alert_id, alerter=alerter))
+        return AlerterOperationData.from_record(record) if record else None
+
+    def clear_alerters_data(self, alert_id: str):
+        delete = """
+            DELETE FROM alerter_data
+             WHERE alert_id=%(alert_id)s
+        """
+        self.backend._deleteall(delete, dict(alert_id=alert_id))
+
+    # -----------------------
     # Recovery actions
+    # -----------------------
 
     def get_recovery_action_data(self, alert_id: str) -> Optional[RecoveryActionData]:
         query = """
@@ -131,6 +166,9 @@ class SpecificBackend:
         record = self.backend._updateone(update, vars(recovery_action_data), returning=True)
         return RecoveryActionData.from_record(record) if record else None
 
+    # ------------------------
+    # Key/Value store
+    # ------------------------
     def get_value_from_key(self, key):
         query = """
             SELECT * FROM key_value_store WHERE key=%(key)s

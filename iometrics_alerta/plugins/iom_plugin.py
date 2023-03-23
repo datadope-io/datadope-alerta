@@ -6,14 +6,14 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Type, List, Tuple, Callable
 
 from alerta.models.alert import Alert
-from alerta.models.enums import Status
+from alerta.models.enums import Status, Action
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import DateTime, get_config, thread_local, AlertIdFilter, ALERTERS_KEY_BY_OPERATION
 from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
-from iometrics_alerta import ContextualConfiguration as CC
-from . import Alerter, AlerterStatus, prepare_result, result_for_exception, AlerterOperationData
+from iometrics_alerta import ContextualConfiguration as CC, GlobalAttributes as GAttr
+from . import Alerter, AlerterStatus, AlerterOperationData
 
 
 _alert_task_by_operation = {}
@@ -22,10 +22,11 @@ _alert_task_by_operation = {}
 def get_alert_task_by_operation(operation):
     global _alert_task_by_operation
     if not _alert_task_by_operation:
-        from .bgtasks import event_task, recovery_task, repeat_task
+        from .bgtasks import event_task, recovery_task, repeat_task, action_task
         _alert_task_by_operation.update({
             Alerter.process_event.__name__: event_task,
             Alerter.process_recovery.__name__: recovery_task,
+            Alerter.process_action.__name__: action_task,
             Alerter.process_repeat.__name__: repeat_task
         })
     return _alert_task_by_operation[operation]
@@ -110,22 +111,26 @@ class IOMAlerterPlugin(PluginBase, ABC):
         delay = CC.get_contextual_global_config(CC.ACTION_DELAY, alert, self, operation)[0]
         return max(0, delay - consumed_time)
 
-    def _prepare_begin_processing(self, alert, alerter_operation_data, is_recovering, is_repeating,
-                                  new_event_status: AlerterStatus, reason):
+    def _prepare_begin_processing(self, alert, alerter_operation_data, is_recovering, is_actioning,
+                                  is_repeating, new_event_status: AlerterStatus, reason):
         begin = datetime.utcnow()
         if is_recovering:
             operation = Alerter.process_recovery.__name__
             new_status = AlerterStatus.Recovering
-            delay = 10.0
+            delay = 5.0
+        elif is_actioning:
+            operation = Alerter.process_action.__name__
+            new_status = AlerterStatus.Actioning
+            delay = 5.0
         elif is_repeating:
             operation = Alerter.process_repeat.__name__
             new_status = AlerterStatus.Repeating
-            delay = 10.0
+            delay = 5.0
         else:
             new_status = new_event_status
             operation = Alerter.process_event.__name__
             delay = self.get_processing_delay(alert, operation)
-        delay = max(10.0, delay) + random.uniform(-5.0, 5.0)  # +/- 5 secs for the configured delay (min config = 10)
+        delay = max(5.0, delay) + random.uniform(-2.0, 5.0)
         alerter_operation_data.received_time = begin
         reason = reason or CC.get_contextual_global_config(CC.REASON, alert, self, operation)[0]
         alerter_operation_data.reason = reason
@@ -154,18 +159,28 @@ class IOMAlerterPlugin(PluginBase, ABC):
 
     def _prepare_post_receive(self, alert, new_event_status: AlerterStatus, kwargs):
         self.global_app_config = kwargs['config']
+        reopening = kwargs.get('reopening')
+        status = Status.Open if reopening else alert.status
         force_recovery = kwargs.get('force_recovery', False)
         force_repeat = kwargs.get('force_repeat', False)
-        recovering = force_recovery or alert.status == Status.Closed
+        force_action = kwargs.get('force_action')
         alerter_operation_data = None
         operation = None
+        recovering = force_recovery or status == Status.Closed
         if recovering:
             operation = Alerter.process_recovery.__name__
             operation_key = ALERTERS_KEY_BY_OPERATION[operation]
             thread_local.operation = operation_key
             alerter_operation_data = AlerterOperationData.from_db(alert.id, self.alerter_name, operation_key)
+        actioning = not force_recovery and force_action
+        if actioning:
+            operation = Alerter.process_action.__name__
+            operation_key = force_action
+            thread_local.operation = operation_key
+            # Actioning => one record for each action. Force creating new record
+            alerter_operation_data = AlerterOperationData(alert.id, self.alerter_name, operation_key)
         alerter_status = self.get_alerter_status_for_alert(alert)
-        repeating = not recovering and alerter_status == AlerterStatus.Processed
+        repeating = not recovering and not actioning and alerter_status == AlerterStatus.Processed
         if repeating:
             operation = Alerter.process_repeat.__name__
             operation_key = ALERTERS_KEY_BY_OPERATION[operation]
@@ -189,10 +204,10 @@ class IOMAlerterPlugin(PluginBase, ABC):
             else:
                 self.logger.debug("Not repeating a failed alerting")
                 repeating = False
-        if alert.repeat and not recovering and not repeating and alerter_status != AlerterStatus.New:
+        if alert.repeat and not recovering and not actioning and not repeating and alerter_status != AlerterStatus.New:
             self.logger.info("Ignoring repetition")
             return None
-        if not recovering and not repeating:
+        if not recovering and not actioning and not repeating:
             operation = Alerter.process_event.__name__
             operation_key = ALERTERS_KEY_BY_OPERATION[operation]
             thread_local.operation = operation_key
@@ -200,7 +215,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
         self.logger.debug("Entering post_receive method")
         reason = kwargs.get('reason') or alert.text
         new_status, begin, delay = self._prepare_begin_processing(
-            alert, alerter_operation_data, is_recovering=recovering, is_repeating=repeating,
+            alert, alerter_operation_data, is_recovering=recovering, is_actioning=actioning, is_repeating=repeating,
             new_event_status=new_event_status, reason=reason)
         return alerter_operation_data, new_status, begin, delay, operation, reason
 
@@ -244,7 +259,8 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 task_specification = self.get_task_specification(alert, operation)
                 task_instance = get_alert_task_by_operation(operation)
                 task = task_instance.apply_async(
-                    kwargs=dict(alerter_data=self.alerter_data, alert=alert, reason=reason),
+                    kwargs=dict(alerter_data=self.alerter_data, alert=alert, reason=reason,
+                                action=kwargs.get('force_action')),
                     countdown=round(delay), **task_specification, include_traceback=store_traceback)
                 self.logger.info("Scheduled task '%s' to run in %.0f seconds in queue '%s'",
                                  task.id, delay, task_specification.get('queue', '<default>'))
@@ -252,10 +268,10 @@ class IOMAlerterPlugin(PluginBase, ABC):
             except Exception as e:
                 self.logger.error("Error executing post_receive: %s", e, exc_info=e)
                 now = datetime.utcnow()
-                retval = False, result_for_exception(e, include_traceback=store_traceback)
+                retval = False, Alerter.result_for_exception(e, include_traceback=store_traceback)
                 status = AlerterStatus.Recovered if operation == Alerter.process_recovery.__name__ \
                     else AlerterStatus.Processed
-                alerter_operation_data = prepare_result(alerter_operation_data, retval, begin, now)
+                alerter_operation_data = Alerter.prepare_result(alerter_operation_data, retval, begin, now)
 
             AlerterStatus.store(alert.id, self.alerter_name, status)
             alerter_operation_data.store()
@@ -273,6 +289,9 @@ class IOMAlerterPlugin(PluginBase, ABC):
             if status == current_status:
                 return None
             alerter_status = self.get_alerter_status_for_alert(alert)
+            if status == Status.Open and alerter_status == AlerterStatus.New:
+                self.logger.info("Alert has been reopen. Processed as new")
+                return self.post_receive(alert, reopening=True, **kwargs)
             if status == Status.Closed:
                 operation = Alerter.process_recovery.__name__
                 operation_key = ALERTERS_KEY_BY_OPERATION[operation]
@@ -317,26 +336,24 @@ class IOMAlerterPlugin(PluginBase, ABC):
                         return self.post_receive(alert, reason=text, force_recovery=True, **kwargs), status, text
                     else:
                         self.logger.info("Status changed to closed for an event that fails alerting. Ignoring")
-                        result_data = {"info": {"message": "RECOVERED AND ALERT WITH ERROR IN THE ALERTING"}}
+                        result_data = {"info": {"message": "RECOVERED AN ALERT WITH ERROR IN THE ALERTING"}}
                         new_alerter_status = AlerterStatus.Recovered
                         self._prepare_recovery_special_result(alerter_operation_data, result_data, start_time)
                         AlerterStatus.store(alert.id, self.alerter_name, new_alerter_status)
                         alerter_operation_data.store()
                         return alert, status, text
-                elif alerter_status in (AlerterStatus.Processing, AlerterStatus.Repeating):
+                elif alerter_status in (AlerterStatus.Processing, AlerterStatus.Repeating, AlerterStatus.Actioning):
                     # Alert will be recovered in the processing task after finish of processing.
                     # If processing finishes ok, or it is a repeating task
                     # the recovery will be launched at the end of the task.
                     # If processing finishes nok or is going to retry,
                     # the recovery will be ignored as alert is supposed to not being notified
-                    self.logger.info("Status changed to closed while processing alerting."
+                    self.logger.info("Status changed to closed while processing alerting, repeating or action."
                                      " Recovering after finish processing.")
-                    prev_operation = Alerter.process_event.__name__ if alerter_status == AlerterStatus.Processing \
-                        else Alerter.process_repeat.__name__
-                    alerter_operation_data_pre = AlerterOperationData.from_db(
-                        alert.id, self.alerter_name, ALERTERS_KEY_BY_OPERATION[prev_operation])
+                    alerter_operation_data_pre = AlerterOperationData.last_executing_operation(
+                        alert_id=alert.id, alerter=self.alerter_name)
                     new_alerter_status, _, _ = self._prepare_begin_processing(
-                        alert, alerter_operation_data, is_recovering=True, is_repeating=False,
+                        alert, alerter_operation_data, is_recovering=True, is_actioning=False, is_repeating=False,
                         new_event_status=AlerterStatus.Scheduled, reason=text)
                     task_definition = self.get_task_specification(alert, Alerter.process_recovery.__name__)
                     alerter_operation_data_pre.task_chain_info = {
@@ -362,9 +379,68 @@ class IOMAlerterPlugin(PluginBase, ABC):
         thread_local.alert_id = alert.id
         thread_local.alerter_name = self.alerter_name
         self.global_app_config = kwargs['config']
-        self.logger.debug("Ignoring take_action")
-        thread_local.alerter_name = None
-        thread_local.operation = None
+        timeout = kwargs['timeout']
+        try:
+            if action not in (Action.CLOSE, Action.EXPIRED) \
+                    and alert.status not in (Status.Closed, Status.Expired):
+                resolve_action = CC.get_global_configuration(GAttr.CONDITION_RESOLVED_ACTION_NAME)
+                # Process operation action
+                alerter_status = self.get_alerter_status_for_alert(alert)
+                operation_key = action
+                thread_local.operation = operation_key
+                start_time = datetime.utcnow()
+                alerter_operation_data = AlerterOperationData.from_db(alert.id, self.alerter_name, operation_key)
+                if alerter_status == AlerterStatus.Scheduled and action == resolve_action:
+                    self.logger.info("Action '%s' while waiting to alert. Closing alert", action)
+                    return alert, Action.CLOSE, text, timeout
+                elif alerter_status in (AlerterStatus.Processed, AlerterStatus.Repeating):
+                    # Repeat and action tasks may be launch in parallel
+                    alerter_operation_data_new = AlerterOperationData.from_db(
+                        alert.id, self.alerter_name, ALERTERS_KEY_BY_OPERATION[Alerter.process_event.__name__])
+                    success = alerter_operation_data_new.success is True
+                    if success:
+                        self.logger.info("Action '%s' for an alerted event. Executing", action)
+                        return self.post_receive(alert, reason=text, force_action=action, **kwargs), \
+                            action, text, timeout
+                    else:
+                        self.logger.info("Action '%s' for an event that fails alerting. Ignoring", action)
+                        result_data = {
+                            "info": {
+                                "message": f"ACTION '{action}' FOR AN ALERT WITH ERROR IN THE ALERTING"
+                            }
+                        }
+                        self._prepare_recovery_special_result(alerter_operation_data, result_data, start_time)
+                        alerter_operation_data.store()
+                        return alert, action, text, timeout
+                elif alerter_status in (AlerterStatus.Scheduled, AlerterStatus.Processing):
+                    # ACTION will be executed in the processing task after finish of processing.
+                    # If processing finishes ok, or it is a repeating task
+                    # the recovery will be launched at the end of the task.
+                    # If processing finishes nok or is going to retry,
+                    # the recovery will be ignored as alert is supposed to not being notified
+                    self.logger.info("Action '%s' while processing alerting."
+                                     " Executing after finish processing.", action)
+                    alerter_operation_data_pre = AlerterOperationData.from_db(
+                        alert.id, self.alerter_name, ALERTERS_KEY_BY_OPERATION[Alerter.process_event.__name__])
+                    new_alerter_status = AlerterStatus.Actioning
+                    task_definition = self.get_task_specification(alert, Alerter.process_action.__name__)
+                    alerter_operation_data_pre.task_chain_info = {
+                        AlerterOperationData.FIELD_TASK_CHAIN_INFO_TASK_DEF: task_definition,
+                        AlerterOperationData.FIELD_TASK_CHAIN_INFO_TEXT: text,
+                        AlerterOperationData.FIELD_TASK_CHAIN_INFO_ACTION: action
+                    }
+                    AlerterStatus.store(alert.id, self.alerter_name, new_alerter_status)
+                    alerter_operation_data_pre.store()
+                    alerter_operation_data.store()
+                    return alert, action, text, timeout
+                elif alerter_status in (AlerterStatus.Recovered, AlerterStatus.Recovering):
+                    self.logger.debug("Action '%s' for an already recovered event. Ignoring.", action)
+                    return None
+                else:
+                    return None
+        finally:
+            thread_local.alerter_name = None
+            thread_local.operation = None
 
     def take_note(self, alert: Alert, text: Optional[str], **kwargs) -> Any:
         thread_local.alert_id = alert.id
@@ -405,13 +481,13 @@ class IOMSyncAlerterPlugin(IOMAlerterPlugin, ABC):
             except Exception as exc:
                 store_traceback = CC.get_contextual_global_config(CC.STORE_TRACEBACK_ON_EXCEPTION,
                                                                   alert, self, operation)[0]
-                response = False, result_for_exception(exc, include_traceback=store_traceback)
+                response = False, Alerter.result_for_exception(exc, include_traceback=store_traceback)
                 self.logger.error("Error executing post_receive: %s", exc, exc_info=exc)
             finally:
                 now = datetime.utcnow()
                 status = AlerterStatus.Recovered if operation == Alerter.process_recovery.__name__ \
                     else AlerterStatus.Processed
-                alerter_operation_data = prepare_result(alerter_operation_data, response, begin, now)
+                alerter_operation_data = Alerter.prepare_result(alerter_operation_data, response, begin, now)
                 self.logger.info("FINISHED IN %.3f sec. RESULT %s -> %s",
                                  (now-begin).total_seconds(),
                                  'SUCCESS' if alerter_operation_data.success else 'FAILURE', response)

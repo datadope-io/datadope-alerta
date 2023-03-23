@@ -68,6 +68,9 @@ class TestAlerter(Alerter):
         finally:
             logger.info("Test: End Repeat")
 
+    def process_action(self, alert: 'Alert', reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
+        return super().process_action(alert, reason, action)
+
 
 class TestPlugin(IOMAlerterPlugin):
 

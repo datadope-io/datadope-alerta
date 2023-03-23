@@ -187,6 +187,9 @@ class EMailAlerter(Alerter):
     def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return True, {}
 
+    def process_action(self, alert: 'Alert', reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
+        return super().process_action(alert, reason, action)
+
 
 class EMailPlugin(IOMAlerterPlugin):
 

@@ -27,6 +27,18 @@ db_alerters = None
 
 logger = logging.getLogger('iometrics_alerta')
 
+ALERTERS_KEY_BY_OPERATION = {
+    'process_event': 'new',
+    'process_recovery': 'recovery',
+    'process_repeat': 'repeat',
+    'process_action': 'action'
+}
+"""
+Defines the task name for each operation. This name will be used as 
+field name of the alerter processing attribute, as the prefix of the event tags
+for values specific by operation.
+"""
+
 CONFIG_PLUGINS = 'PLUGINS'
 """
 Configuration var with the list of alerta plugins to use.
@@ -52,24 +64,10 @@ ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX = '_CONFIG'
 Alerter configuration will be formed as '<ALERTER_NAME>{ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX}'.
 """
 
-
 ALERTER_IGNORE = 'ignore'
 """
 Name of the alerter to configure in alerters attribute to indicate that the alert must be ignored and
 no alerter should be notified. It is the same of an empty array in that attribute.
-"""
-
-ALERTERS_KEY_BY_OPERATION = {
-    'process_event': 'new',
-    'process_recovery': 'recovery',
-    'process_repeat': 'repeat'
-}
-"""
-Defines the task name for each operation. This name will be used as 
-field name of the alerter processing attribute, as the prefix of the event tags
-for values specific by operation...
-
-May be overriden by configuration.
 """
 
 ALERTERS_TEMPLATES_LOCATION = os.path.abspath(os.path.join(os.path.dirname(__file__), '../templates'))
@@ -508,6 +506,27 @@ class GlobalAttributes:
     Recovery actions definition.
     """
 
+    CONDITION_RESOLVED_ACTION_NAME = VarDefinition('conditionResolvedActionName', default='resolve')
+    """
+    Name of the action that can be used to indicate that the situation that generated the alert
+    has been resolved. Depending on 'CONDITION_RESOLVED_MUST_CLOSE' value, this action will be
+    mapped to a close action or not. Alerters may implement the processing of this action on their
+    own way if it will not close the alert. Default implementation will execute the same operation
+    than the one executed when closing the alert, but in an action operation => alert is not close
+    and, therefore, alerter status is not 'recovered'.
+    """
+
+    CONDITION_RESOLVED_MUST_CLOSE = VarDefinition('conditionResolvedMustClose', default=True)
+    """
+    If true, alert will be closed when received a 'resolve' action. If false,
+    alert is not closed and a 'resolve' action is processed.
+    """
+
+    CONDITION_RESOLVED_TAG = VarDefinition('conditionResolvedTag', default='resolved')
+    """
+    Tag that will be included is 'CONDITION_RESOLVED_ACTION_NAME' action is received.
+    """
+
 
 class RecoveryActionsFields:
     __slots__ = ()
@@ -604,7 +623,15 @@ class ContextualConfiguration(object):
             'interval_step': 5.0,  # Only for exponential = false
             'interval_max': 10.0 * 60,  # Max interval 10 min
             'jitter': True  # If true, random seconds between 0 and exponential calculated time
-        }}
+        }},
+        ALERTERS_KEY_BY_OPERATION['process_action']: {'queue': 'action', 'priority': 6, 'retry_spec': {
+            'max_retries': 2,
+            'exponential': True,
+            'interval_first': 2.0,  # First retry after 10 secs
+            'interval_step': 5.0,  # Only for exponential = false
+            'interval_max': 10.0 * 60,  # Max interval 10 min
+            'jitter': False  # If true, random seconds between 0 and exponential calculated time
+        }},
     })
     """
     Definition of task execution for the alert. Dict with the keys:
@@ -649,6 +676,8 @@ class ContextualConfiguration(object):
         "recovery": "PROBLEM {{ alert.event }} RECOVERED in resource {{ alert.resource }}"
                     "\n{{ pretty_alert|safe }}",
         "repeat": "PROBLEM {{ alert.event }} REPEATED in resource {{ alert.resource }}"
+                  "\n{{ pretty_alert|safe }}",
+        "action": "ACTION ON EVENT {{ alert.event }} in resource {{ alert.resource }}"
                   "\n{{ pretty_alert|safe }}"
     })
     """
@@ -656,9 +685,10 @@ class ContextualConfiguration(object):
     """
 
     REASON = VarDefinition('reason', {
-        "new": "New event",
-        "recovery": "Event recovered",
-        "repeat": "Event repetition received"
+        "new": "New alert",
+        "recovery": "Alert closed",
+        "repeat": "Alert repetition received",
+        "action": "Action executed on alert"
     })
     """
     Default reason to include in the response.
@@ -785,7 +815,7 @@ class ContextualConfiguration(object):
         :return: configuration value and context where it was found
         """
         if global_config is None:
-            global_config = {}
+            global_config = flask.current_app.config
         if alerter_config is None:
             alerter_config = {}
         level = None

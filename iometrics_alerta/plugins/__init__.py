@@ -16,12 +16,18 @@ from alerta.models.alert import Alert
 from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     NormalizedDictView, render_template, ALERTERS_KEY_BY_OPERATION, \
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
-    AlertIdFilter
+    AlertIdFilter, GlobalAttributes
 from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 
 
 def getLogger(name):  # noqa
     filter_ = AlertIdFilter.get_instance()
+    partial = name
+    partial, _, end = partial.rpartition('.')
+    while partial:
+        tmp = get_task_logger(partial)
+        tmp.addFilter(filter_)
+        partial, _, end = partial.rpartition('.')
     logger_ = get_task_logger(name)
     logger_.addFilter(filter_)
     return logger_
@@ -52,6 +58,7 @@ class AlerterStatus(str, Enum):
     Processed = 'processed'
     Recovering = 'recovering'
     Recovered = 'recovered'
+    Actioning = 'actioning'
 
     @classmethod
     def _missing_(cls, value):
@@ -69,6 +76,11 @@ class AlerterStatus(str, Enum):
         if record is None:
             record = db_alerters.create_status(alert_id, alerter, status.value)
         return AlerterStatus(record)
+
+    @classmethod
+    def clear(cls, alert_id):
+        from iometrics_alerta import db_alerters
+        db_alerters.clear_status(alert_id)
 
 
 class Alerter(ABC):
@@ -89,6 +101,64 @@ class Alerter(ABC):
         :return:
         """
         pass
+
+    @abstractmethod
+    def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Operation to notify a new alert.
+
+        :param alert: alert object
+        :param reason: reason of the operation
+        :return: Success or error and a response dict. An empty response dict will indicate that operation is skipped.
+        """
+        pass
+
+    @abstractmethod
+    def process_recovery(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Operation to notify that an alert is closed.
+
+        :param alert: alert object
+        :param reason: reason of the operation
+        :return: Success or error and a response dict. An empty response dict will indicate that operation is skipped.
+        """
+        pass
+
+    @abstractmethod
+    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Operation to notify that an alert has received a repetition.
+
+        :param alert: alert object
+        :param reason: reason of the operation
+        :return: Success or error and a response dict. An empty response dict will indicate that operation is skipped.
+        """
+        pass
+
+    @abstractmethod
+    def process_action(self, alert: 'Alert', reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Operation to notify that an action (other than close) has been issued on the alert.
+
+        Default implementation executes close in case of 'resolve' action and do nothing for any other action.
+
+        :param alert: alert object
+        :param reason: reason of the operation
+        :param action: issued action on alert
+        :return: Success or error and a response dict. An empty response dict will indicate that operation is skipped.
+        """
+        #
+        if action == ContextualConfiguration.get_global_configuration(
+                GlobalAttributes.CONDITION_RESOLVED_ACTION_NAME):
+            ignore_recovery, level = self.get_contextual_configuration(ContextualConfiguration.IGNORE_RECOVERY,
+                                                                       alert=alert,
+                                                                       operation=Alerter.process_recovery.__name__)
+            if ignore_recovery:
+                logger.info("Ignoring recovery configured with context '%s'", level.value)
+                result_data = {"info": {"message": "IGNORED RECOVERY"}}
+                return True, result_data
+            return self.process_recovery(alert, reason)
+        return True, {}
 
     @classmethod
     def get_alerter_config(cls, alerter_name, do_not_cache=False) -> Dict[str, Any]:
@@ -285,18 +355,6 @@ class Alerter(ABC):
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
-    @abstractmethod
-    def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    def process_recovery(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        pass
-
     def get_message(self, alert: Alert, operation: str) -> str:
         message = None
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
@@ -316,42 +374,44 @@ class Alerter(ABC):
         dry_run, _ = self.get_contextual_configuration(ContextualConfiguration.DRY_RUN, alert, operation)
         return dry_run
 
+    @staticmethod
+    def prepare_result(alerter_operation_data: AlerterOperationData,
+                       retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
+                       start_time: datetime = None, end_time: datetime = None,
+                       skipped: bool = None, retries: int = None) -> AlerterOperationData:
+        if isinstance(retval, tuple):
+            success, response = retval
+        else:
+            success, response = True, retval
+        alerter_operation_data.success = success
+        alerter_operation_data.response = response
+        if start_time:
+            alerter_operation_data.start_time = start_time
+        if end_time:
+            alerter_operation_data.end_time = end_time
+        if skipped is None and not response:
+            skipped = True
+        if skipped is not None:
+            alerter_operation_data.skipped = skipped
+        if retries:
+            alerter_operation_data.retries = retries
+        return alerter_operation_data
 
-def prepare_result(alerter_operation_data: AlerterOperationData,
-                   retval: Union[Dict[str, Any], Tuple[bool, Dict[str, Any]]],
-                   start_time: datetime = None, end_time: datetime = None,
-                   skipped: bool = None, retries: int = None) -> AlerterOperationData:
-    if isinstance(retval, tuple):
-        success, response = retval
-    else:
-        success, response = True, retval
-    alerter_operation_data.success = success
-    alerter_operation_data.response = response
-    if start_time:
-        alerter_operation_data.start_time = start_time
-    if end_time:
-        alerter_operation_data.end_time = end_time
-    if skipped is not None:
-        alerter_operation_data.skipped = skipped
-    if retries:
-        alerter_operation_data.retries = retries
-    return alerter_operation_data
-
-
-def result_for_exception(exc, einfo=None, include_traceback=False):
-    if exc is None and einfo is None:
-        try:
-            raise Exception('Failure without exception')
-        except Exception as e:
-            exc = e
-    result = {
-        'reason': 'exception',
-        'info': {
-            'message': str(exc or einfo.exception),
-            'type': (type(exc) if exc else einfo.type).__name__
+    @staticmethod
+    def result_for_exception(exc, einfo=None, include_traceback=False):
+        if exc is None and einfo is None:
+            try:
+                raise Exception('Failure without exception')
+            except Exception as e:
+                exc = e
+        result = {
+            'reason': 'exception',
+            'info': {
+                'message': str(exc or einfo.exception),
+                'type': (type(exc) if exc else einfo.type).__name__
+            }
         }
-    }
-    if include_traceback:
-        result['info']['traceback'] = ''.join(traceback.format_exception(
-            type(exc), exc, exc.__traceback__)) if exc else einfo.traceback
-    return result
+        if include_traceback:
+            result['info']['traceback'] = ''.join(traceback.format_exception(
+                type(exc), exc, exc.__traceback__)) if exc else einfo.traceback
+        return result

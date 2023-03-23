@@ -1,0 +1,37 @@
+---
+alerter_title: "IOMetrics GChat Alerter"
+
+max_message_characters: 3500
+
+#default logos configuration
+alerter_logos:
+  iometrics:
+    security: "https://drive.google.com/uc?id=1oss2KjJ5QzO2I0pzU_dI4KcCXCuH51xs"
+    critical: "https://drive.google.com/uc?id=1oss2KjJ5QzO2I0pzU_dI4KcCXCuH51xs"
+    major: "https://drive.google.com/uc?id=1QoNFH2WLH4nINlJKR7x23QEavv-79fMs"
+    minor: "https://drive.google.com/uc?id=1qkqO79VN3exNTYwFg_oxlLvBGoARyM7f"
+    warning: "https://drive.google.com/uc?id=1RVjmYwsveif7vBGS0KQkuHC5D4ycTwUg"
+    indeterminate: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
+    informational: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    normal: "https://drive.google.com/uc?id=1qkqO79VN3exNTYwFg_oxlLvBGoARyM7f"
+    ok: "https://drive.google.com/uc?id=1U95tWuZXUt0IPPOonmpHo6oQvdRE6mn8"
+    cleared: "https://drive.google.com/uc?id=1U95tWuZXUt0IPPOonmpHo6oQvdRE6mn8"
+    debug: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    trace: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    unknown: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
+  zabbix:
+    security: "https://i.imgur.com/pIWU2Dv.png"
+    critical: "https://i.imgur.com/pIWU2Dv.png"
+    major: "https://i.imgur.com/2HYYLSG.png"
+    minor: "https://i.imgur.com/8RACcnC.png"
+    warning: "https://i.imgur.com/8fRX14C.png"
+    indeterminate: "https://i.imgur.com/uj44LrX.png"
+    informational: "https://i.imgur.com/9dmJ570.png"
+    normal: "https://i.imgur.com/8RACcnC.png"
+    ok: "https://i.imgur.com/QsWc2MC.png"
+    cleared: "https://i.imgur.com/QsWc2MC.png"
+    debug: "https://i.imgur.com/9dmJ570.png"
+    trace: "https://i.imgur.com/9dmJ570.png"
+    unknown: "https://i.imgur.com/uj44LrX.png"
+  default:
+    unknown: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
