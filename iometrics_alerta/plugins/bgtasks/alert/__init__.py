@@ -109,10 +109,9 @@ class AlertTask(celery.Task, ABC):
     @classmethod
     def _get_parameters(cls, kwargs):  # task_id null for intermediate requests => begin time is not popped
         alerter_data = kwargs['alerter_data']
-        alert = kwargs['alert']
+        alert_id = kwargs['alert_id']
         action_ = kwargs.get('action')
         alerter_name = alerter_data[BGTadC.NAME]
-        alert_id = alert['id']
         operation = cls.get_operation()
         operation_key = action_ or ALERTERS_KEY_BY_OPERATION[operation]
         return alert_id, alerter_name, operation, operation_key
@@ -226,7 +225,7 @@ class AlertTask(celery.Task, ABC):
             revoke_task(task_id)
 
     # noinspection PyShadowingNames
-    def run(self, alerter_data: dict, alert: dict, reason: Optional[str], action: str = None):
+    def run(self, alerter_data: dict, alert_id: str, reason: Optional[str], action: str = None):
         alerter = self._get_alerter(alerter_data, self)
         operation = self.get_operation()
         operation_key = action or ALERTERS_KEY_BY_OPERATION[operation]
@@ -236,7 +235,7 @@ class AlertTask(celery.Task, ABC):
                          f"Total time and number of alerter {alerter.name} operation {operation_key}")
         ts = bg_timer.start_timer()
         try:
-            parameters = [Alert.parse(alert), reason]
+            parameters = [Alert.find_by_id(alert_id), reason]
             if action:
                 parameters.append(action)
             response = getattr(alerter, operation)(*parameters)

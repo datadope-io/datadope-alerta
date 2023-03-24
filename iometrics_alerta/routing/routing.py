@@ -6,7 +6,7 @@ from alerta.models.enums import Status
 
 from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration
 from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
-from iometrics_alerta import thread_local, initialize
+from iometrics_alerta import thread_local, initialize, AlertIdFilter
 from iometrics_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionData
 from iometrics_alerta.plugins import AlerterStatus
 from iometrics_alerta.plugins.iom_plugin import IOMAlerterPlugin
@@ -20,6 +20,7 @@ _recovery_actions_plugin: str | None = None
 
 
 def initialize_plugins(plugins_object, config):
+    logger.addFilter(AlertIdFilter.get_instance())
     initialize()
     all_plugins = config.get(CONFIG_PLUGINS, [])
     alerters = []

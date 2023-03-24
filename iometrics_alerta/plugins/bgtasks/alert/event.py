@@ -79,7 +79,7 @@ class Task(AlertTask):
                 alerter_operation_data.task_chain_info = None
                 reason = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_TEXT, alert.text)
                 task_def = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_TASK_DEF, {})
-                kwargs['alert'] = alert
+                kwargs['alert_id'] = alert.id
                 kwargs['reason'] = reason
                 recovery_task = self.get_recovery_task()
                 task = signature(recovery_task, args=[], kwargs=kwargs).apply_async(countdown=2.0, **task_def)
@@ -101,7 +101,7 @@ class Task(AlertTask):
                 reason = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_TEXT, alert.text)
                 task_def = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_TASK_DEF, {})
                 action = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_ACTION, '')
-                kwargs['alert'] = alert
+                kwargs['alert_id'] = alert.id
                 kwargs['reason'] = reason
                 kwargs['action'] = action
                 action_task = self.get_action_task()

@@ -4,7 +4,7 @@ from typing import Optional, Any
 import pytz
 
 from alerta.models.alert import Alert
-from alerta.models.enums import Action
+from alerta.models.enums import Action, Status
 from alerta.plugins import PluginBase
 
 from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime, thread_local
@@ -114,7 +114,7 @@ class IOMAPreprocessPlugin(PluginBase):
                     logger.info("Closing alert on a resolve action as '%s' tag is active",
                                 GAttr.CONDITION_RESOLVED_MUST_CLOSE.var_name)
                     return alert, Action.CLOSE, text, kwargs.get('timeout')
-            elif action == Action.OPEN:
+            elif action == Action.OPEN and alert.status == Status.Closed:
                 logger.warning("Reopening alert. Removing alerter information")
                 AlerterStatus.clear(alert_id=alert.id)
                 AlerterOperationData.clear(alert_id=alert.id)
