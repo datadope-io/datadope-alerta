@@ -259,7 +259,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
                 task_specification = self.get_task_specification(alert, operation)
                 task_instance = get_alert_task_by_operation(operation)
                 task = task_instance.apply_async(
-                    kwargs=dict(alerter_data=self.alerter_data, alert=alert, reason=reason,
+                    kwargs=dict(alerter_data=self.alerter_data, alert_id=alert.id, reason=reason,
                                 action=kwargs.get('force_action')),
                     countdown=round(delay), **task_specification, include_traceback=store_traceback)
                 self.logger.info("Scheduled task '%s' to run in %.0f seconds in queue '%s'",

@@ -19,6 +19,7 @@ if not is_initialized():
     app = create_app()
     celery = create_celery_app(app)
     initialize(app)
+
 else:
     from flask import current_app
     app = current_app
