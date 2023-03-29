@@ -47,19 +47,29 @@ class GChatAlerter(Alerter):
         return super().process_action(alert, reason, action)
 
     def _process_alert(self, operation, alert):
-        host, _ = self.get_contextual_configuration(VarDefinition('HOST', var_type=dict), alert, operation)
-        trigger, _ = self.get_contextual_configuration(VarDefinition('TRIGGER', var_type=dict), alert, operation)
-        host = host.get('HOST', alert.resource)
-        trigger_name = trigger.get('NAME', alert.service)
-        trigger_severity = trigger.get('SEVERITY', alert.severity)
-        event_title, event_title_context = \
-            self.get_contextual_configuration(VarDefinition('ALERTER_TITLE', var_type=str), alert, operation)
+        host, _ = self.get_contextual_configuration(VarDefinition('HOST.HOST', var_type=str), alert, operation)
+        if host is None:
+            host = alert.resource
+
+        trigger_name, _ = self.get_contextual_configuration(
+            VarDefinition('TRIGGER.NAME', var_type=str), alert, operation)
+        if trigger_name is None:
+            trigger_name = alert.service
+
+        trigger_severity, _ = self.get_contextual_configuration(
+            VarDefinition('TRIGGER.SEVERITY', var_type=str), alert, operation)
+        if trigger_severity is None:
+            trigger_severity = alert.severity
+
         alert_type, _ = self.get_contextual_configuration(VarDefinition('TYPE', var_type=str), alert, operation)
         if alert_type is None:
             alert_type = 'iometrics'
 
+        event_title, event_title_context = \
+            self.get_contextual_configuration(VarDefinition('ALERTER_TITLE', var_type=str), alert, operation)
+
         alert_logos, _ = self.get_contextual_configuration(
-            VarDefinition('alerter_logos', var_type=dict), alert, operation)
+            VarDefinition('ALERTER_LOGOS', var_type=dict), alert, operation)
 
         if event_title_context and event_title_context == ConfigurationContext.AlerterConfig:
             if operation and operation == Alerter.process_recovery.__name__:
@@ -68,11 +78,11 @@ class GChatAlerter(Alerter):
             else:
                 event_title += ": New Alert Received"
 
-        event_logo = alert_logos.get(alert_type, 'default').get(trigger_severity, 'unknown')
+        event_logo = alert_logos.get(alert_type).get(trigger_severity, 'unknown')
 
         event_time = alert.create_time.strftime('%d/%m/%Y, %H:%M:%S')
         max_length, _ = self.get_contextual_configuration(VarDefinition(
-            'max_message_characters', var_type=int), alert, Alerter.process_event.__name__)
+            'MAX_MESSAGE_CHARACTERS', var_type=int), alert, Alerter.process_event.__name__)
         message_sections = self.split_message(alert.text, max_length)
 
         chats_list, _ = self.get_contextual_configuration(VarDefinition('GCHAT'), alert,
@@ -115,6 +125,8 @@ class GChatAlerter(Alerter):
                             logger.info("GChat %s notified successfully", str(chat_url))
                         else:
                             logger.warning("Could not notify GChat: %s", str(chat_url))
+                else:
+                    logger.warning("Could not notify any chat, no chats provided")
         except Exception as e:
             logger.exception("UNHANDLED EXCEPTION: %s", str(e))
 
@@ -141,7 +153,7 @@ class GChatAlerter(Alerter):
                 else:
                     logger.warning("Invalid gchat %s. Please use id_ prefix or direct url" % chat)
         else:
-            logger.warning("No 'GCHAT' tag for gchat alerter")
+            logger.warning("No 'GCHAT' tag recieved")
 
         return chats_lists
 

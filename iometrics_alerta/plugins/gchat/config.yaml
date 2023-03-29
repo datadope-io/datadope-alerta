@@ -33,5 +33,3 @@ alerter_logos:
     debug: "https://i.imgur.com/9dmJ570.png"
     trace: "https://i.imgur.com/9dmJ570.png"
     unknown: "https://i.imgur.com/uj44LrX.png"
-  default:
-    unknown: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
