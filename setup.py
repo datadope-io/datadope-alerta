@@ -51,6 +51,9 @@ setup(
         'alerta.database.backends': [
             'iometrics = iometrics_alerta.backend.flexiblededup'
         ],
+        'alerta.routing': [
+            'rules = iometrics_alerta.routing.routing:rules'
+        ],
         'alerta.plugins': [
             'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
             'recovery_actions = iometrics_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',

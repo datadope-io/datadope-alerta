@@ -8,7 +8,7 @@ from celery.utils.time import get_exponential_backoff_interval
 from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
 from alerta.models.metrics import Timer
-from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
+from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC, ContextualConfiguration, GlobalAttributes
 from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
 from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException
@@ -234,15 +234,19 @@ class AlertTask(celery.Task, ABC):
                          f"{alerter.name} {operation_key}",
                          f"Total time and number of alerter {alerter.name} operation {operation_key}")
         ts = bg_timer.start_timer()
+        do_not_retry = False
         try:
-            parameters = [Alert.find_by_id(alert_id), reason]
+            alert = Alert.find_by_id(alert_id)
+            do_not_retry_tag = ContextualConfiguration.get_global_configuration(GlobalAttributes.DO_NOT_RETRY_TAG)
+            do_not_retry = do_not_retry_tag in alert.tags
+            parameters = [alert, reason]
             if action:
                 parameters.append(action)
             response = getattr(alerter, operation)(*parameters)
             return response
         except (RetryableException, ConnectionError, RequestsConnectionError, RequestsTimeout) as e:
             retry_data = self.request.properties.get('retry_spec')
-            if not retry_data:
+            if not retry_data or do_not_retry:
                 raise
             else:
                 max_retries, countdown = self.get_retry_parameters(self.request.retries, retry_data)

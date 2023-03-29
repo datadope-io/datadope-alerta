@@ -2,8 +2,6 @@
 # A file example.env is provided. Make a copy as '.env' and modify the values as needed.
 version: "2.4"
 
-name: iometrics-alerta
-
 volumes:
   alerta_postgres:
 

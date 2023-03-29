@@ -2,7 +2,7 @@ FROM python:3.10-slim AS builder
 
 ARG TARGETPLATFORM
 ARG VERSION
-ENV VERSION=${VERSION:-0.2.0}
+ENV VERSION=${VERSION:-1.0.0}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
@@ -26,13 +26,11 @@ RUN pipenv lock \
 COPY VERSION LICENSE README.md setup*.py /app/
 COPY iometrics_alerta /app/iometrics_alerta
 
-RUN python -m setup_routing bdist_wheel \
-    && python -m setup bdist_wheel
+RUN python -m setup bdist_wheel
 
 # Install iometrics-alerta
 WORKDIR /
-RUN pip install /app/dist/alerta_routing-${VERSION}-py3-none-any.whl \
-    && pip install /app/dist/iometrics_alerta-${VERSION}-py3-none-any.whl
+RUN pip install /app/dist/iometrics_alerta-${VERSION}-py3-none-any.whl
 
 # Cleaning
 RUN apt-get -y purge --auto-remove build-essential \
@@ -63,11 +61,11 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /usr/lib/ /usr/lib/
 COPY config_example/* /etc/iometrics-alerta/
 
-RUN groupadd user && useradd --create-home --home-dir /home/user -g user user
-WORKDIR /home/user
+RUN groupadd alerta && useradd --create-home --home-dir /home/alerta -u 1000 -g alerta alerta
+WORKDIR /home/alerta
 
 COPY deployment/entry_point_celery* /usr/local/bin/
-USER user
+USER alerta
 CMD entry_point_celery_worker.sh
 # CMD ./entry_point_celery_beat.sh
 # CMD ./entry_point_celery_flower.sh
