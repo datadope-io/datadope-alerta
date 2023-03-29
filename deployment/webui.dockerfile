@@ -17,4 +17,8 @@ WORKDIR /app/dist
 COPY deployment/logos /app/dist/logos
 COPY deployment/entry_point_webui.sh /usr/local/bin
 
+RUN useradd -ms /bin/bash -u 1000 webui && \
+    chown -R webui:0 /app
+USER webui
+
 CMD entry_point_webui.sh

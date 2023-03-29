@@ -73,5 +73,9 @@ WORKDIR /app
 COPY deployment/iom_wsgi.py /app/
 COPY deployment/entry_point_alerta.sh /usr/local/bin/
 
+RUN useradd -ms /bin/bash -u 1000 alerta && \
+    chown -R alerta:0 /app
+USER alerta
+
 # EXPOSE 8000
 CMD entry_point_alerta.sh

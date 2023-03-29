@@ -61,11 +61,11 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /usr/lib/ /usr/lib/
 COPY config_example/* /etc/iometrics-alerta/
 
-RUN groupadd user && useradd --create-home --home-dir /home/user -g user user
-WORKDIR /home/user
+RUN groupadd alerta && useradd --create-home --home-dir /home/alerta -u 1000 -g alerta alerta
+WORKDIR /home/alerta
 
 COPY deployment/entry_point_celery* /usr/local/bin/
-USER user
+USER alerta
 CMD entry_point_celery_worker.sh
 # CMD ./entry_point_celery_beat.sh
 # CMD ./entry_point_celery_flower.sh
