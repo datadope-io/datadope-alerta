@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-ADD  https://github.com/alerta/alerta-webui/releases/latest/download/alerta-webui.tar.gz .
+ADD  https://github.com/datadope-io/alerta-webui/releases/latest/download/alerta-webui.tar.gz .
 RUN tar -xzvf alerta-webui.tar.gz \
     && rm alerta-webui.tar.gz
 

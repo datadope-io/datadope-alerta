@@ -527,6 +527,10 @@ class GlobalAttributes:
     Tag that will be included is 'CONDITION_RESOLVED_ACTION_NAME' action is received.
     """
 
+    DO_NOT_RETRY_TAG = VarDefinition('doNotRetryTag', default='do_not_retry')
+    """
+    Include this tag to prevent retrying a failing alerting tag.
+    """
 
 class RecoveryActionsFields:
     __slots__ = ()
