@@ -54,7 +54,8 @@ ENV ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf \
     CELERY_BEAT_LOGLEVEL=info \
     CELERY_BEAT_DATABASE=/var/tmp/celerybeat-schedule \
     CELERY_FLOWER_PORT=5555 \
-    AUTO_CLOSE_TASK_INTERVAL=60.0
+    AUTO_CLOSE_TASK_INTERVAL=60.0 \
+    CELERY_CONCURRENCY=10
 
 COPY --from=builder /usr/local/lib/python3.10/site-packages/ /usr/local/lib/python3.10/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
