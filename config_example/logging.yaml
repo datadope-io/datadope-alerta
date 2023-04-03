@@ -20,9 +20,7 @@ DEFAULT_LOG_HANDLERS: &log_handlers
 # Override level and handlers for specific loggers.
 LOGGERS_SPECIFIC: &loggers
   iometrics_alerta:
-    level: DEBUG
-  alerta.database.backends.flexiblededup:
-    level: DEBUG
+    level: *default_log_level
   alerta:
     level: *default_log_level
   flask_cors.core:
