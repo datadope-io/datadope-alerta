@@ -293,7 +293,7 @@ class Alerter(ABC):
         if data:
             return data.response
 
-    def render_template(self, template_path, alert, operation=None):
+    def render_template(self, template_path, alert, operation=None, **kwargs):
         """
         Helper method for alerters to render a file formatted as Jinja2 template.
 
@@ -321,7 +321,8 @@ class Alerter(ABC):
                                alerter_name=self.name,
                                operation=operation,
                                operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
-                               pretty_alert=alert_pretty_json_string(alert))
+                               pretty_alert=alert_pretty_json_string(alert),
+                               **kwargs)
 
     def render_value(self, value, alert, operation=None, **kwargs):
         """
@@ -362,10 +363,10 @@ class Alerter(ABC):
             try:
                 message = self.render_template(template, alert=alert, operation=operation)
             except TemplateNotFound:
-                logger.info("Template %s not found for email Alerter. Using other options to create message",
-                            template)
+                logger.info("Template '%s' not found for '%s' Alerter. Using other options to create message",
+                            template, self.name)
             except Exception as e:
-                logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
+                logger.warning("Error rendering template: '%s'. Using other options to create message", e, exc_info=e)
         if message is None:
             message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
         return message
