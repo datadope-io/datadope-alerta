@@ -293,7 +293,7 @@ class Alerter(ABC):
         if data:
             return data.response
 
-    def render_template(self, template_path, alert, operation=None):
+    def render_template(self, template_path, alert, operation=None, **kwargs):
         """
         Helper method for alerters to render a file formatted as Jinja2 template.
 
@@ -321,7 +321,8 @@ class Alerter(ABC):
                                alerter_name=self.name,
                                operation=operation,
                                operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
-                               pretty_alert=alert_pretty_json_string(alert))
+                               pretty_alert=alert_pretty_json_string(alert),
+                               **kwargs)
 
     def render_value(self, value, alert, operation=None, **kwargs):
         """
@@ -355,15 +356,15 @@ class Alerter(ABC):
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
-    def get_message(self, alert: Alert, operation: str) -> str:
+    def get_message(self, alert: Alert, operation: str, alerter: str, **kwargs) -> str:
         message = None
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
         if template:
             try:
-                message = self.render_template(template, alert=alert, operation=operation)
+                message = self.render_template(template, alert=alert, operation=operation, **kwargs)
             except TemplateNotFound:
-                logger.info("Template %s not found for email Alerter. Using other options to create message",
-                            template)
+                logger.info("Template %s not found for %s Alerter. Using other options to create message",
+                            template, alerter)
             except Exception as e:
                 logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
         if message is None:

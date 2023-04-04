@@ -33,3 +33,10 @@ alerter_logos:
     debug: "https://i.imgur.com/9dmJ570.png"
     trace: "https://i.imgur.com/9dmJ570.png"
     unknown: "https://i.imgur.com/uj44LrX.png"
+
+
+message_icons:
+  provoked_by: "https://e7.pngegg.com/pngimages/67/430/png-clipart-laptop-computer-monitors-computer-icons-desktop-computers-pc-angle-electronics.png"
+  criticality: "http://cdn.onlinewebfonts.com/svg/img_412390.png"
+  message: "https://www.freeiconspng.com/thumbs/envelope-icon/envelope-icon-0.png"
+  cause: ""

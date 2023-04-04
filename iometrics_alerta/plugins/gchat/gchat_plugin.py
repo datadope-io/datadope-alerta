@@ -46,78 +46,42 @@ class GChatAlerter(Alerter):
     def process_action(self, alert: Alert, reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
         return super().process_action(alert, reason, action)
 
-    def _process_alert(self, operation, alert):
-        host, _ = self.get_contextual_configuration(VarDefinition('HOST.HOST', var_type=str), alert, operation)
-        if host is None:
-            host = alert.resource
-
-        trigger_name, _ = self.get_contextual_configuration(
-            VarDefinition('TRIGGER.NAME', var_type=str), alert, operation)
-        if trigger_name is None:
-            trigger_name = alert.service
-
-        trigger_severity, _ = self.get_contextual_configuration(
-            VarDefinition('TRIGGER.SEVERITY', var_type=str), alert, operation)
-        if trigger_severity is None:
-            trigger_severity = alert.severity
-
-        alert_type, _ = self.get_contextual_configuration(VarDefinition('TYPE', var_type=str), alert, operation)
-        if alert_type is None:
-            alert_type = 'iometrics'
-
+    def _process_alert(self, operation, alert: Alert):
+        host = alert.resource
+        trigger_name = alert.event
+        trigger_severity = alert.severity
+        alert_type = alert.event_type
         event_title, event_title_context = \
             self.get_contextual_configuration(VarDefinition('ALERTER_TITLE', var_type=str), alert, operation)
+        event_subtitle = None
 
         alert_logos, _ = self.get_contextual_configuration(
             VarDefinition('ALERTER_LOGOS', var_type=dict), alert, operation)
 
         if event_title_context and event_title_context == ConfigurationContext.AlerterConfig:
             if operation and operation == Alerter.process_recovery.__name__:
-                event_title += ": Alert Recovery"
+                event_subtitle = "Alert Recovery"
                 trigger_severity = 'ok'
             else:
-                event_title += ": New Alert Received"
+                event_subtitle = "New Alert Received"
 
-        event_logo = alert_logos.get(alert_type).get(trigger_severity, 'unknown')
+        event_logo = alert_logos[alert_type][trigger_severity] if \
+            alert_type in alert_logos else alert_logos['iometrics'][trigger_severity]
 
         event_time = alert.create_time.strftime('%d/%m/%Y, %H:%M:%S')
         max_length, _ = self.get_contextual_configuration(VarDefinition(
-            'MAX_MESSAGE_CHARACTERS', var_type=int), alert, Alerter.process_event.__name__)
-        message_sections = self.split_message(alert.text, max_length)
+            'MAX_MESSAGE_CHARACTERS', var_type=int), alert, operation)
 
-        chats_list, _ = self.get_contextual_configuration(VarDefinition('GCHAT'), alert,
-                                                          Alerter.process_event.__name__)
+        chats_list, _ = self.get_contextual_configuration(VarDefinition('GCHAT'), alert, operation)
         chats_list = self._get_gchat_chats(chats_list)
+        message_icons = self._config.get('message_icons')
+        # message_sections = self.split_message(self.get_message(alert, operation), max_length)
+        message_sections = self.get_message(alert, operation, self.__class__.__name__)
         response = None
         try:
             for idx, section in enumerate(message_sections):
-                event_message = {
-                    "text": event_title + ". " + host + ". " + trigger_name,
-                    "previewText": event_title + ". " + host + ". " + trigger_name,
-                    "fallbackText": event_title + ". " + host + ". " + trigger_name,
-                    "cards": [
-                        {
-                            "header": {
-                                "title": event_title,
-                                "subtitle": "Triggered - " + event_time,
-                                "imageUrl": event_logo,
-                                "imageStyle": "IMAGE"
-                            },
-                            "sections": [
-                                {
-                                    "widgets": [
-                                        {
-                                            "keyValue": {
-                                                "topLabel": "Message",
-                                                "content": section
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
+                event_message = message_sections
+
                 if chats_list:
                     for idy, chat_url in enumerate(chats_list):
                         response = self._send_message_to_gchat(chat_url, event_message)
@@ -140,7 +104,7 @@ class GChatAlerter(Alerter):
                 for chat in gchat_tag:
                     gchats = gchats.join(f'{chat},')
                 gchat_tag = gchats
-            chats = gchat_tag.replace(' ', '').split(',')
+            chats = [x.strip() for x in gchat_tag.split(',')]
             for chat in chats:
                 if re.search(GOOGLE_CHAT_URL_REGEX, chat):
                     chats_lists.add(chat)
@@ -161,33 +125,19 @@ class GChatAlerter(Alerter):
     def _send_message_to_gchat(chat_url, message):
         response = None
         warn = True
-        start = time.time()
         response_message = "SEND GCHAT MESSAGE"
         try:
-            logger.info("REQUEST " + response_message,
-                        extra={
-                            'operation': Alerter.process_event.__name__,
-                            'chat_url': chat_url,
-                            'request_data': message
-                        })
+            logger.info("REQUEST " + response_message)
             response = requests.post(chat_url, json=message, proxies={})
         except Exception as e:
             logger.warning("ERROR sending information to Google Chat: {}".format(str(e)))
             response_message = "ERROR SENDING GCHAT MESSAGE"
         else:
-            logger.debug("Message sent to Google Chat; chat: '{}', message: '{}'".format(chat_url, message))
+            logger.debug("Trying to send to Google Chat; chat: '{}', message: '{}'".format(chat_url, message))
             warn = False
         finally:
             logger_func = logger.warning if warn else logger.info
-            logger_func("%s", response_message,
-                        extra={
-                            'operation': Alerter.process_event.__name__,
-                            'chat_url': chat_url,
-                            'status': response.status_code if response else -1,
-                            'success': response.status_code in (200, 201) if response else False,
-                            'duration': time.time() - start,
-                            'response': response.json() if response else {}}
-                        )
+            logger_func("%s", response_message)
             return response
 
     @staticmethod
@@ -202,17 +152,6 @@ class GChatAlerter(Alerter):
         message_pieces.append(raw_message)
 
         return message_pieces
-
-    @staticmethod
-    def _get_url_zabbix_logo(priority):
-        return {
-            'indeterminate': 'https://i.imgur.com/uj44LrX.png',
-            'informational': 'https://i.imgur.com/9dmJ570.png',
-            'warning': 'https://i.imgur.com/8fRX14C.png',
-            'minor': 'https://i.imgur.com/8RACcnC.png',
-            'major': 'https://i.imgur.com/2HYYLSG.png',
-            'critical': 'https://i.imgur.com/pIWU2Dv.png',
-        }.get(priority, 'https://i.imgur.com/uj44LrX.png')
 
 
 class GChatPlugin(IOMAlerterPlugin):

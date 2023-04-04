@@ -85,7 +85,7 @@ class EMailAlerter(Alerter):
                                                        operation=operation)
         event_tags = self.get_event_tags(alert, operation)
 
-        full_message = self.get_message(alert, operation)
+        full_message = self.get_message(alert, operation, self.__class__.__name__)
         content_type, _ = self.get_contextual_configuration(VarDefinition(DATA_EMAIL_CONTENT_TYPE),
                                                             alert, operation)
 
