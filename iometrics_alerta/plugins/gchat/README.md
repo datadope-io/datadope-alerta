@@ -30,8 +30,9 @@ hierarchy by the Alerta project. That'd be:
     - Example: `{"iometrics": {"security": "url", "critical": "url", "major": "url", "minor": "url", "warning": "url",
       "indeterminate": "url", "informational": "url", "normal": "url", "ok": "url", "cleared": "url",
       "debug": "url", "trace": "url", "unknown": "url"}`
+* **cards_template**: Template that specifies how the cards are built when being sent to Google Chat. Follows
+    the format indicated on [Google Docs](https://developers.google.com/chat/api/reference/rest/v1/cards).
 
-* **max_message_characters**: Max number of characters that the message sent might have. `3500` by default.
 
 ## Tags
 
@@ -50,7 +51,3 @@ information, there are a few that can be used to alter the behaviour of the plug
 
 - `ALERTER_TITLE`: If this tag is present, it will replace the default usage of the variable `alerter_title`
   present on the default config file.
-
-
-- `MAX_MESSAGE_CHARACTERS`: If this tag is present, it will replace the default usage of the variable
-  `max_message_characters`  present on the default config file.

@@ -1,8 +1,6 @@
 ---
 alerter_title: "IOMetrics GChat Alerter"
 
-max_message_characters: 3500
-
 #default logos configuration
 alerter_logos:
   iometrics:
@@ -40,3 +38,49 @@ message_icons:
   criticality: "http://cdn.onlinewebfonts.com/svg/img_412390.png"
   message: "https://www.freeiconspng.com/thumbs/envelope-icon/envelope-icon-0.png"
   cause: ""
+
+
+cards_template:
+  cardsV2:
+    - cardId: card_one
+      card:
+        header:
+          title: "{{event_title}}"
+          subtitle: "{{event_subtitle}}"
+          imageType: SQUARE
+          imageUrl: "{{event_logo}}"
+          imageAltText: Alert event icon
+        sections:
+          - collapsible: true
+            uncollapsibleWidgetsCount: 5
+            widgets:
+              - decoratedText:
+                  topLabel: Triggered
+                  startIcon:
+                    knownIcon: CLOCK
+                  text: "{{event_time}}"
+              - decoratedText:
+                  topLabel: Provoked By
+                  startIcon:
+                    iconUrl: "{{message_icons.provoked_by}}"
+                  text: "{{alert.resource}}"
+                  wrapText: true
+              - decoratedText:
+                  topLabel: Cause
+                  startIcon:
+                    iconUrl: "{{message_icons.cause}}"
+                  text: "{{alert.event}}"
+              - decoratedText:
+                  topLabel: Criticality
+                  startIcon:
+                    iconUrl: "{{message_icons.criticality}}"
+                  text: "{{alert.severity}}"
+              - textParagraph:
+                  text: Alert Message
+              - divider: { }
+              - decoratedText:
+                  topLabel: Message
+                  startIcon:
+                    iconUrl: "{{message_icons.message}}"
+                  text: "{{message_text}}"
+                  wrapText: true

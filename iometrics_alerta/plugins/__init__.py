@@ -326,7 +326,7 @@ class Alerter(ABC):
 
     def render_value(self, value, alert, operation=None, **kwargs):
         """
-        Helper method for alerters to render a file formatted as Jinja2 template.
+        Helper method for alerters to render a value (dict, list or str) formatted as Jinja2 template.
 
         Template may use the variables:
           * alert: alert object
@@ -356,12 +356,12 @@ class Alerter(ABC):
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
-    def get_message(self, alert: Alert, operation: str, alerter: str, **kwargs) -> str:
+    def get_message(self, alert: Alert, operation: str) -> str:
         message = None
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
         if template:
             try:
-                message = self.render_template(template, alert=alert, operation=operation, **kwargs)
+                message = self.render_template(template, alert=alert, operation=operation)
             except TemplateNotFound:
                 logger.info("Template '%s' not found for '%s' Alerter. Using other options to create message",
                             template, self.name)

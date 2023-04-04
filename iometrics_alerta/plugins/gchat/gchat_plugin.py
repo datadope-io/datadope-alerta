@@ -1,6 +1,5 @@
 import os
 import re
-import time
 from typing import Optional, Tuple, Dict, Any
 import requests
 import yaml
@@ -47,8 +46,6 @@ class GChatAlerter(Alerter):
         return super().process_action(alert, reason, action)
 
     def _process_alert(self, operation, alert: Alert):
-        host = alert.resource
-        trigger_name = alert.event
         trigger_severity = alert.severity
         alert_type = alert.event_type
         event_title, event_title_context = \
@@ -69,28 +66,27 @@ class GChatAlerter(Alerter):
             alert_type in alert_logos else alert_logos['iometrics'][trigger_severity]
 
         event_time = alert.create_time.strftime('%d/%m/%Y, %H:%M:%S')
-        max_length, _ = self.get_contextual_configuration(VarDefinition(
-            'MAX_MESSAGE_CHARACTERS', var_type=int), alert, operation)
 
         chats_list, _ = self.get_contextual_configuration(VarDefinition('GCHAT'), alert, operation)
         chats_list = self._get_gchat_chats(chats_list)
-        message_icons = self._config.get('message_icons')
-        # message_sections = self.split_message(self.get_message(alert, operation), max_length)
-        message_sections = self.get_message(alert, operation, self.__class__.__name__)
+        message_icons = self._config['message_icons']
+        template = self._config['cards_template']
         response = None
         try:
-            for idx, section in enumerate(message_sections):
-                event_message = message_sections
-
-                if chats_list:
-                    for idy, chat_url in enumerate(chats_list):
-                        response = self._send_message_to_gchat(chat_url, event_message)
-                        if response and response.status_code in (200, 201):
-                            logger.info("GChat %s notified successfully", str(chat_url))
-                        else:
-                            logger.warning("Could not notify GChat: %s", str(chat_url))
-                else:
-                    logger.warning("Could not notify any chat, no chats provided")
+            message_text = self.get_message(alert, operation)
+            event_message = self.render_value(template, alert, operation, event_logo=event_logo,
+                                              message_icons=message_icons,
+                                              event_time=event_time, event_title=event_title,
+                                              event_subtitle=event_subtitle, message_text=message_text)
+            if chats_list and event_message:
+                for idy, chat_url in enumerate(chats_list):
+                    response = self._send_message_to_gchat(chat_url, event_message)
+                    if response and response.status_code in (200, 201):
+                        logger.info("GChat %s notified successfully", str(chat_url))
+                    else:
+                        logger.warning("Could not notify GChat: %s", str(chat_url))
+            else:
+                logger.warning("Could not notify any chat, no chats provided")
         except Exception as e:
             logger.exception("UNHANDLED EXCEPTION: %s", str(e))
 
@@ -139,19 +135,6 @@ class GChatAlerter(Alerter):
             logger_func = logger.warning if warn else logger.info
             logger_func("%s", response_message)
             return response
-
-    @staticmethod
-    def split_message(message, max_characters):
-        message_pieces = []
-        raw_message = message
-
-        while len(raw_message) > max_characters:
-            section_pieces = raw_message[:max_characters].rsplit('\n', 1)
-            message_pieces.append(section_pieces[0])
-            raw_message = raw_message[len(section_pieces[0]) + 1:]
-        message_pieces.append(raw_message)
-
-        return message_pieces
 
 
 class GChatPlugin(IOMAlerterPlugin):
