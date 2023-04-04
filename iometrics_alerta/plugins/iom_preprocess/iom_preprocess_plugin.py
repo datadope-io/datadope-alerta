@@ -118,6 +118,11 @@ class IOMAPreprocessPlugin(PluginBase):
                 logger.warning("Reopening alert. Removing alerter information")
                 AlerterStatus.clear(alert_id=alert.id)
                 AlerterOperationData.clear(alert_id=alert.id)
+                condition_resolved_tag = CConfig.get_global_configuration(GAttr.CONDITION_RESOLVED_TAG)
+                if condition_resolved_tag in alert.tags:
+                    alert.tags.remove(condition_resolved_tag)
+                    alert.update_tags(alert.tags)
+                    return alert, action, text, kwargs.get('timeout')
             return None
         finally:
             thread_local.alerter_name = None

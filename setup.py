@@ -22,7 +22,7 @@ setup(
     license='GPLv3',
     author='Victor Garcia',
     author_email='victor.garcia@datadope.io',
-    packages=find_packages(exclude=['iometrics_alerta.routing']),
+    packages=find_packages(),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
         'requests',
@@ -49,6 +49,9 @@ setup(
     entry_points={
         'alerta.database.backends': [
             'iometrics = iometrics_alerta.backend.flexiblededup'
+        ],
+        'alerta.routing': [
+            'rules = iometrics_alerta.routing.routing:rules'
         ],
         'alerta.plugins': [
             'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',

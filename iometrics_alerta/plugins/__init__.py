@@ -363,10 +363,10 @@ class Alerter(ABC):
             try:
                 message = self.render_template(template, alert=alert, operation=operation, **kwargs)
             except TemplateNotFound:
-                logger.info("Template %s not found for %s Alerter. Using other options to create message",
-                            template, alerter)
+                logger.info("Template '%s' not found for '%s' Alerter. Using other options to create message",
+                            template, self.name)
             except Exception as e:
-                logger.warning("Error rendering template: %s. Using other options to create message", e, exc_info=e)
+                logger.warning("Error rendering template: '%s'. Using other options to create message", e, exc_info=e)
         if message is None:
             message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
         return message
