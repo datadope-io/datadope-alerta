@@ -85,6 +85,11 @@ class SpecificBackend:
             VALUES (%(alert_id)s, %(alerter)s, %(operation)s, %(received_time)s, %(start_time)s, %(end_time)s, 
                 %(success)s, %(skipped)s, %(retries)s, %(response)s, %(reason)s, %(bg_task_id)s,
                 %(task_chain_info)s)
+            ON CONFLICT (alert_id, alerter, operation) WHERE operation in ('new', 'recovery') DO UPDATE
+               SET alert_id=%(alert_id)s, alerter=%(alerter)s, operation=%(operation)s, 
+                   received_time=%(received_time)s, start_time=%(start_time)s, end_time=%(end_time)s, 
+                   success=%(success)s, skipped=%(skipped)s, retries=%(retries)s, response=%(response)s, 
+                   reason=%(reason)s, bg_task_id=%(bg_task_id)s, task_chain_info=%(task_chain_info)s
             RETURNING *
         """
         record = self.backend._insert(insert, vars(alerter_data))
