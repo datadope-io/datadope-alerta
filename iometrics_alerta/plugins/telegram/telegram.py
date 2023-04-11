@@ -13,10 +13,8 @@ CONFIG_KEY = 'alerta_config_telegram'
 
 
 class TelegramAlerter(Alerter):
-    # alerts sent to telegram
     _config = None
 
-    # get_default_configuration -> read default configuration file
     @classmethod
     def get_default_configuration(cls) -> dict:
         if cls._config is None:
@@ -30,23 +28,18 @@ class TelegramAlerter(Alerter):
         with open(conf_file, 'r') as file:
             return yaml.safe_load(file.read())
 
-    # process_repeat -> Alerta does it
     def process_repeat(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return True, {}
 
-    # process_action -> the super() method does it
     def process_action(self, alert: Alert, reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
         return super().process_action(alert, reason, action)
 
-    # process_recovery -> the alert is already fixed
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return self._process_alert(Alerter.process_recovery.__name__, alert)
 
-    # process_event
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return self._process_alert(Alerter.process_event.__name__, alert)
 
-    # process_alert
     def _process_alert(self, operation, alert: Alert):
         try:
             chats_list, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_CHATS', var_type=str),
@@ -109,7 +102,7 @@ class TelegramAlerter(Alerter):
         url = self._config.get('url') % bot_token
 
         if not really_sent:
-            self._set_logger_info(trigger_type)
+            logger.info("REQUEST " + trigger_type)
 
             try:
                 response = requests.get(url, params=request_params,
@@ -122,7 +115,7 @@ class TelegramAlerter(Alerter):
                 warn = False
                 logger.debug("Message sent to Telegram; chat: '{}', message: '{}'".format(chat_id, message))
                 logger_func = logger.warning if warn else logger.info
-                self._set_logger_func_info(logger_func, response_message)
+                logger_func("%s", response_message)
 
                 if response.json()["ok"]:
                     return response
@@ -133,17 +126,9 @@ class TelegramAlerter(Alerter):
     @staticmethod
     def get_txt(trigger_type, message):
         if trigger_type == "PROBLEM":
-            return str("\U0000274c \n" + message)
+            return str("\U0000274c \U0000274c \U0000274c \n" + message)
         elif trigger_type == "RECOVERY":
-            return str("\U00002714 \n" + message)
-
-    @staticmethod
-    def _set_logger_info(response_message):
-        logger.info("REQUEST " + response_message)
-
-    @staticmethod
-    def _set_logger_func_info(logger_func, response_message):
-        logger_func("%s", response_message)
+            return str("\U00002714 \U00002714 \U00002714 \n" + message)
 
     @staticmethod
     def split_message(message, max_characters):
@@ -162,7 +147,3 @@ class TelegramAlerter(Alerter):
 class TelegramPlugin(IOMAlerterPlugin):
     def get_alerter_class(self):
         return TelegramAlerter
-
-#  alerta send  --group Web --environment Production --service Prueba --attributes "alerters=telegram,test_async"
-#  --value "Value 1" --event event1 --attributes 'eventTags={"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOTS":"DataDope_bot"}'
-#  --severity major --resource test6
