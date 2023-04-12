@@ -394,7 +394,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
                     self.logger.info("Action '%s' while waiting to alert. Closing alert", action)
                     return alert, Action.CLOSE, text, timeout
                 elif alerter_status in (AlerterStatus.Processed, AlerterStatus.Repeating):
-                    # Repeat and action tasks may be launch in parallel
+                    # Repeat and action tasks may be launched in parallel
                     alerter_operation_data_new = AlerterOperationData.from_db(
                         alert.id, self.alerter_name, ALERTERS_KEY_BY_OPERATION[Alerter.process_event.__name__])
                     success = alerter_operation_data_new.success is True
@@ -420,6 +420,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
                     # the recovery will be ignored as alert is supposed to not being notified
                     self.logger.info("Action '%s' while processing alerting."
                                      " Executing after finish processing.", action)
+                    alerter_operation_data.received_time = datetime.utcnow()
                     alerter_operation_data_pre = AlerterOperationData.from_db(
                         alert.id, self.alerter_name, ALERTERS_KEY_BY_OPERATION[Alerter.process_event.__name__])
                     new_alerter_status = AlerterStatus.Actioning
