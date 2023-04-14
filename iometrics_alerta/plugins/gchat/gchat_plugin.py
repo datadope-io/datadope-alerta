@@ -21,7 +21,7 @@ class GChatAlerter(Alerter):
     _config = None
 
     @staticmethod
-    def read_default_configuration():
+    def _read_default_configuration():
         conf_file = get_config(key=CONFIG_FILE_KEY, default=os.path.join(os.path.dirname(__file__),
                                                                          DEFAULT_CONFIG_FILE))
         with open(conf_file, 'r') as f:
@@ -30,7 +30,7 @@ class GChatAlerter(Alerter):
     @classmethod
     def get_default_configuration(cls) -> dict:
         if cls._config is None:
-            cls._config = cls.read_default_configuration()
+            cls._config = cls._read_default_configuration()
         return cls._config
 
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
@@ -68,11 +68,11 @@ class GChatAlerter(Alerter):
         event_time = alert.create_time.strftime('%d/%m/%Y, %H:%M:%S')
 
         chats_list, _ = self.get_contextual_configuration(VarDefinition('GCHAT'), alert, operation)
-        chats_list = self._get_gchat_chats(chats_list)
-        message_icons = self._config['message_icons']
-        template = self._config['cards_template']
         response = None
         try:
+            chats_list = self._get_gchat_chats(chats_list)
+            message_icons = self._config['message_icons']
+            template = self._config['cards_template']
             message_text = self.get_message(alert, operation)
             event_message = self.render_value(template, alert, operation, event_logo=event_logo,
                                               message_icons=message_icons,
@@ -89,10 +89,11 @@ class GChatAlerter(Alerter):
                 logger.warning("Could not notify any chat, no chats provided")
         except Exception as e:
             logger.exception("UNHANDLED EXCEPTION: %s", str(e))
+            raise
+        return (True, {}) if (response and response.status_code in (200, 201)) else (False, {})
 
-        return response.status_code in (200, 201), {}
-
-    def _get_gchat_chats(self, gchat_tag):
+    @staticmethod
+    def _get_gchat_chats(gchat_tag):
         chats_lists = set()
         if gchat_tag:
             if isinstance(gchat_tag, list):
@@ -104,12 +105,6 @@ class GChatAlerter(Alerter):
             for chat in chats:
                 if re.search(GOOGLE_CHAT_URL_REGEX, chat):
                     chats_lists.add(chat)
-                elif re.search('^id_(.*)', chat):
-                    alias_url = self._config.get('chat_directory', {}).get(re.search('^id_(.*)', chat).group(1))
-                    if not alias_url:
-                        logger.warning("Invalid gchat %s. Set the entry in directory without prefix id_." % chat)
-                    else:
-                        chats_lists.add(alias_url)
                 else:
                     logger.warning("Invalid gchat %s. Please use id_ prefix or direct url" % chat)
         else:
@@ -119,22 +114,14 @@ class GChatAlerter(Alerter):
 
     @staticmethod
     def _send_message_to_gchat(chat_url, message):
-        response = None
-        warn = True
-        response_message = "SEND GCHAT MESSAGE"
         try:
-            logger.info("REQUEST " + response_message)
+            logger.info("REQUEST SEND GCHAT MESSAGE; chat: '{}', message: '{}'".format(chat_url, message))
             response = requests.post(chat_url, json=message, proxies={})
         except Exception as e:
             logger.warning("ERROR sending information to Google Chat: {}".format(str(e)))
-            response_message = "ERROR SENDING GCHAT MESSAGE"
-        else:
-            logger.debug("Trying to send to Google Chat; chat: '{}', message: '{}'".format(chat_url, message))
-            warn = False
-        finally:
-            logger_func = logger.warning if warn else logger.info
-            logger_func("%s", response_message)
-            return response
+            raise
+
+        return response
 
 
 class GChatPlugin(IOMAlerterPlugin):
