@@ -315,13 +315,13 @@ class Alerter(ABC):
         event_tags = self.get_event_tags(alert, operation)
         return render_template(template_path,
                                alert=alert,
-                               attributes=attributes,
-                               event_tags=event_tags,
-                               alerter_config=self.config,
-                               alerter_name=self.name,
+                               attributes=kwargs.pop('attributes', attributes),
+                               event_tags=kwargs.pop('event_tags', event_tags),
+                               alerter_config=kwargs.pop('alerter_config', self.config),
+                               alerter_name=kwargs.pop('alerter_name', self.name),
                                operation=operation,
-                               operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
-                               pretty_alert=alert_pretty_json_string(alert),
+                               operation_key=kwargs.pop('operation_key', ALERTERS_KEY_BY_OPERATION[operation] if operation else None),
+                               pretty_alert=kwargs.pop('pretty_alert', alert_pretty_json_string(alert)),
                                **kwargs)
 
     def render_value(self, value, alert, operation=None, **kwargs):
@@ -356,19 +356,34 @@ class Alerter(ABC):
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
-    def get_message(self, alert: Alert, operation: str) -> str:
+    def get_message(self, alert: Alert, operation: str, **kwargs) -> str:
+        """
+        Returns message info for the alerta and operation.
+
+        Message info is read from a Jinja2 template if available. If no template is available for the alerter and
+        operation, it is read from attribute 'message' for event and repeat operations and from alert reason for
+        the other operations.
+
+        :param alert: alert to process
+        :param operation: processing operation
+        :param kwargs: Extra variables to pass to render template method
+        :return: Message information
+        """
         message = None
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
         if template:
             try:
-                message = self.render_template(template, alert=alert, operation=operation)
+                message = self.render_template(template, alert=alert, operation=operation, **kwargs)
             except TemplateNotFound:
                 logger.info("Template '%s' not found for '%s' Alerter. Using other options to create message",
                             template, self.name)
             except Exception as e:
                 logger.warning("Error rendering template: '%s'. Using other options to create message", e, exc_info=e)
         if message is None:
-            message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
+            if operation in (Alerter.process_recovery.__name__, Alerter.process_action.__name__):
+                message, _ = self.get_contextual_configuration(ContextualConfiguration.REASON, alert, operation)
+            else:
+                message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
         return message
 
     def is_dry_run(self, alert: Alert, operation: str) -> bool:
