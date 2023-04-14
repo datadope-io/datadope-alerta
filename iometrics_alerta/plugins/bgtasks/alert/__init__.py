@@ -175,7 +175,8 @@ class AlertTask(celery.Task, ABC):
                 alerter_operation_data.retries = self.request.retries
             else:
                 alerter_operation_data.start_time = start_time
-            AlerterStatus.store(alert_id, alerter_name, new_status)
+                if alerter_operation_data.received_time is None:
+                    alerter_operation_data.received_time = alerter_operation_data.start_time
             AlerterStatus.store(alert_id, alerter_name, new_status)
             alerter_operation_data.store()
 

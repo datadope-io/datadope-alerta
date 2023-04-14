@@ -18,6 +18,7 @@ class Task(AlertTask):
             task_def = task_data.get(AlerterOperationData.FIELD_TASK_CHAIN_INFO_TASK_DEF, {})
             kwargs['alert_id'] = alert.id
             kwargs['reason'] = reason
+            kwargs.pop('action', None)
             recovery_task = self.get_recovery_task()
             task = signature(recovery_task, args=[], kwargs=kwargs).apply_async(countdown=2.0, **task_def)
             alerter_operation_data_recovery = AlerterOperationData.from_db(alerter_operation_data.alert_id,
