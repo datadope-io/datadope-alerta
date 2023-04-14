@@ -17,6 +17,9 @@ flower = "==1.2.0"
 python-dateutil = "==2.8.2"
 
 [dev-packages]
+requests-mock = "*"
+coverage = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.10"
