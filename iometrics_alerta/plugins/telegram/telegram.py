@@ -3,8 +3,8 @@ from typing import Optional, Tuple, Dict, Any
 
 import requests  # noqa
 import yaml  # noqa
-
 from alerta.models.alert import Alert
+
 from iometrics_alerta import get_config, logger, VarDefinition
 from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
@@ -41,52 +41,45 @@ class TelegramAlerter(Alerter):
         return self._process_alert(Alerter.process_event.__name__, alert)
 
     def _process_alert(self, operation, alert: Alert):
-        try:
-            chats_list, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_CHATS', var_type=str),
-                                                              alert,
-                                                              operation=operation)
-            if not chats_list:
-                logger.error("TAG \"TELEGRAM_CHATS\" NOT EXISTS OR IS EMPTY!")
-                return False, {}
+        chats_list, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_CHATS', var_type=str),
+                                                          alert,
+                                                          operation=operation)
+        if not chats_list:
+            logger.error("TAG \"TELEGRAM_CHATS\" NOT EXISTS OR IS EMPTY!")
+            return False, {}
 
-            chats_list = chats_list.split(',')
+        chats_list = chats_list.split(',')
 
-            notification_sound, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_SOUND', var_type=int),
-                                                                      alert,
-                                                                      operation=operation)
-            if not notification_sound:
-                notification_sound = 1
+        notification_sound, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_SOUND', var_type=int),
+                                                                  alert,
+                                                                  operation=operation)
+        if not notification_sound:
+            notification_sound = 1
 
-            telegram_bot, _ = self.get_contextual_configuration(VarDefinition('BOTS', var_type=str),
-                                                                alert,
-                                                                operation=operation)
-            if not telegram_bot:
-                logger.error("TAG \"BOTS\" NOT EXISTS OR IS EMPTY!")
-                return False, {}
+        telegram_bot, _ = self.get_contextual_configuration(VarDefinition('BOTS', var_type=str),
+                                                            alert,
+                                                            operation=operation)
+        if not telegram_bot:
+            logger.error("TAG \"BOTS\" NOT EXISTS OR IS EMPTY!")
+            return False, {}
 
-            bot_token = None
-            try:
-                bot_token = self._config.get('bots').get(telegram_bot, {}).get('token', None)
-            except KeyError:
-                logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
+        bot_token = self._config.get('bots').get(telegram_bot, {}).get('token', None)
 
-            if not bot_token:
-                logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
-                return False, {}
+        if not bot_token:
+            logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
+            return False, {}
 
-            else:
-                message_sections = self.split_message(alert.value,
-                                                      self._config.get('max_message_characters', 4000))
-                for chat_id in chats_list:
-                    for message in message_sections:
-                        self._send_telegram_message(message, bot_token, chat_id, notification_sound,
-                                                    trigger_type="PROBLEM")
+        else:
+            message_sections = self.split_message(self.get_message(alert, operation),
+                                                  self._config.get('max_message_characters', 4096))
+            for chat_id in chats_list:
+                for message in message_sections:
+                    self._send_telegram_message(message, bot_token, chat_id, notification_sound,
+                                                trigger_type=operation)
 
-            return True, {}
-        except Exception as e:
-            logger.error("EXCEPTION UNHANDLED IN TELEGRAM PLUGIN! '%s'", str(e))
+        return True, {}
 
-    def _send_telegram_message(self, message, bot_token, chat_id, notification_sound, trigger_type="PROBLEM"):
+    def _send_telegram_message(self, message, bot_token, chat_id, notification_sound, trigger_type):
         response = None
         really_sent = False
         response_message = "SEND TELEGRAM MESSAGE"
@@ -110,6 +103,7 @@ class TelegramAlerter(Alerter):
                 response.raise_for_status()
             except requests.exceptions.RequestException:
                 logger.warning("ERROR sending message to Telegram: %s" % str(response))
+                raise
 
             else:
                 warn = False
@@ -117,7 +111,7 @@ class TelegramAlerter(Alerter):
                 logger_func = logger.warning if warn else logger.info
                 logger_func("%s", response_message)
 
-                if response.json()["ok"]:
+                if "ok" in response.json():
                     return response
                 else:
                     logger.error("ERROR sending message to Telegram: %s" % str(response.json()))
@@ -125,9 +119,9 @@ class TelegramAlerter(Alerter):
 
     @staticmethod
     def get_txt(trigger_type, message):
-        if trigger_type == "PROBLEM":
+        if trigger_type == Alerter.process_event.__name__:
             return str("\U0000274c \U0000274c \U0000274c \n" + message)
-        elif trigger_type == "RECOVERY":
+        elif trigger_type == Alerter.process_recovery.__name__:
             return str("\U00002714 \U00002714 \U00002714 \n" + message)
 
     @staticmethod
