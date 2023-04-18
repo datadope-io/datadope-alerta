@@ -311,4 +311,3 @@ class TestTelegramPlugin:
             post_mock.side_effect = requests.exceptions.RequestException()
             with pytest.raises(requests.exceptions.RequestException):
                 alerter.process_recovery(alert, reason='test_reason')
-                alerter.process_event(alert, reason='test_reason')
