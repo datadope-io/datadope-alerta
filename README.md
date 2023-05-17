@@ -140,8 +140,8 @@ python -m setup bdist_wheel
 One the packages are build, they can be installed in an alerta python environment:
 
 ```shell
-pipenv install iometrics-alerta/dist/alerta_routing-1.0.0-py3-none-any.whl
-pipenv install iometrics-alerta/dist/iometrics_alerta-1.0.0-py3-none-any.whl
+pipenv install iometrics-alerta/dist/alerta_routing-1.0.1-py3-none-any.whl
+pipenv install iometrics-alerta/dist/iometrics_alerta-1.0.1-py3-none-any.whl
 ```
 
 Or may be included in the Alerta deployment Pipfile.
