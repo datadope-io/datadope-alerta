@@ -72,10 +72,14 @@ class AlerterStatus(str, Enum):
     @classmethod
     def store(cls, alert_id, alerter, status: 'AlerterStatus') -> 'AlerterStatus':
         from iometrics_alerta import db_alerters
-        record = db_alerters.update_status(alert_id, alerter, status.value)
-        if record is None:
-            record = db_alerters.create_status(alert_id, alerter, status.value)
-        return AlerterStatus(record)
+        try:
+            record = db_alerters.update_status(alert_id, alerter, status.value)
+            if record is None:
+                record = db_alerters.create_status(alert_id, alerter, status.value)
+            return AlerterStatus(record)
+        except Exception as e:  # noqa
+            logger.warning("Exception storing alerter status: %s", e)
+            return status
 
     @classmethod
     def clear(cls, alert_id):

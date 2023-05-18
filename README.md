@@ -132,7 +132,7 @@ Several api contexts are provided by IOMetrics Alerta to support new functionali
 
 ### Package building
 
-Project provides a python packages. To create the package, go to the project folder, 
+Project provides a python package. To create the package, go to the project folder, 
 start the python virtual environment and issue the setup commands:
 
 ```shell
