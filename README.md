@@ -289,7 +289,7 @@ used (configuration file in config_example is prepared to run a celery worker co
 The command to run the worker might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" worker --loglevel=debug
+celery -A "iometrics_alerta.bgtasks.celery" worker --loglevel=debug
 ```
 
 This command will run a worker that will consume from all the queues defined in configuration file.
@@ -310,7 +310,7 @@ The following periodic tasks will be executed:
 The command to run celery beat process might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
+celery -A "iometrics_alerta.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
 ```
 
 
@@ -322,7 +322,7 @@ example Pipfile provided before).
 With this library installed, a server can be launched within the alert/celery pipenv:
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" flower
+celery -A "iometrics_alerta.bgtasks.celery" flower
 ```
 
 Without parameters, the server will listen in port 5555. Use argument `--port` to change the port.

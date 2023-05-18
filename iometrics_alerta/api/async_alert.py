@@ -42,7 +42,7 @@ def receive():
     remote_addr = next(iter(request.access_route), request.remote_addr)
     environ = {'REMOTE_ADDR': remote_addr}
 
-    from .async_alert_task import async_receive
+    from iometrics_alerta.bgtasks.async_alert_task import async_receive
     # bg_task_id = async_receive.apply_async(kwargs=dict(alert=alert.serialize, user=g.login))
     task = async_receive.apply_async(kwargs=dict(alert_dict=alert.serialize,
                                                  user=g.login,

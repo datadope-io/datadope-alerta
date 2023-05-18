@@ -10,7 +10,7 @@ from alerta.utils.audit import write_audit_trail
 from alerta.utils.api import process_alert
 from iometrics_alerta import thread_local
 from iometrics_alerta.plugins import getLogger
-from iometrics_alerta.plugins.bgtasks import celery
+from iometrics_alerta.bgtasks import celery
 
 
 logger = getLogger(__name__)
