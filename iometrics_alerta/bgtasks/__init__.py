@@ -37,5 +37,7 @@ from .periodic_tasks import check_automatic_closing # noqa - To provide import f
 
 from .recovery_actions import launch_actions  # noqa - To provide import for package modules
 
+from .async_alert_task import async_receive  # noqa - To provide import for package modules
+
 # Tasks defined as classes must be instantiated and registered
 from .alert import event_task, recovery_task, repeat_task, action_task  # noqa - To provide import for package modules

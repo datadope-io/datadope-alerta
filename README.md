@@ -118,30 +118,34 @@ launched instead. It will be in charge of executing the configured recovery acti
 After actions are executed it will leave some time to the alert to be recovered. If the alert is not closed during
 that time, it will launch the configured alerters.
 
+## Additional API contexts
 
+Several api contexts are provided by IOMetrics Alerta to support new functionalities:
+
+| Context                    | Method | Function                                                                                                               |
+|----------------------------|--------|------------------------------------------------------------------------------------------------------------------------|
+| /alert/<alert_id>/alerters | GET    | Returns alerters information related to an alert                                                                       |
+| /async/alert               | POST   | Receives an alert as in /alert but processes it asynchronously. Returns the id of the task that will process the alert |
+| /async/alert/<bg_task_id>  | GET    | Returns the status of an async alert creation requested using previous context                                         |
+ 
 ## Deployment
 
 ### Package building
 
-Project provides two python packages. One for the routing definition, and another for iometrics backend and plugins.
-Routing must have a specific package name: `alerta_routing`. This is why it has to be build separately from the rest
-of components.
-
-To create the packages, go to the project folder, start the python virtual environment and issue the setup commands:
+Project provides a python package. To create the package, go to the project folder, 
+start the python virtual environment and issue the setup commands:
 
 ```shell
 pipenv shell
-python -m setup_routing bdist_wheel
 python -m setup bdist_wheel
 ```
 
 ### Package installation
 
-One the packages are build, they can be installed in an alerta python environment:
+One the package is built, it can be installed in an alerta python environment:
 
 ```shell
-pipenv install iometrics-alerta/dist/alerta_routing-1.0.1-py3-none-any.whl
-pipenv install iometrics-alerta/dist/iometrics_alerta-1.0.1-py3-none-any.whl
+pipenv install iometrics-alerta/dist/iometrics_alerta-1.1.0-py3-none-any.whl
 ```
 
 Or may be included in the Alerta deployment Pipfile.
@@ -179,7 +183,7 @@ python-dateutil = "*"
 python_version = "3.10"
 ```
 
-IOMetrics packages may be included in this Pipfile pointing to the wheel files or to the git repo.
+IOMetrics-Alerta package may be included in this Pipfile pointing to the wheel file or to the git repo.
 
 ### Configuration
 
@@ -285,7 +289,7 @@ used (configuration file in config_example is prepared to run a celery worker co
 The command to run the worker might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" worker --loglevel=debug
+celery -A "iometrics_alerta.bgtasks.celery" worker --loglevel=debug
 ```
 
 This command will run a worker that will consume from all the queues defined in configuration file.
@@ -306,7 +310,7 @@ The following periodic tasks will be executed:
 The command to run celery beat process might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
+celery -A "iometrics_alerta.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
 ```
 
 
@@ -318,7 +322,7 @@ example Pipfile provided before).
 With this library installed, a server can be launched within the alert/celery pipenv:
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" flower
+celery -A "iometrics_alerta.bgtasks.celery" flower
 ```
 
 Without parameters, the server will listen in port 5555. Use argument `--port` to change the port.

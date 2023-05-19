@@ -16,6 +16,7 @@ from alerta.models.enums import Status, Severity
 from alerta.utils.format import DateTime
 
 from .specific import SpecificBackend
+from .async_alert import AsyncAlert
 
 ATTRIBUTE_DEDUPLICATION = 'deduplication'
 ATTRIBUTE_DEDUPLICATION_TYPE = 'deduplicationType'
@@ -56,6 +57,7 @@ class Backend(PGBackend):
         self.uri = None
         self.dbname = None
         self.backend_alerters = None
+        self.backend_async_alert = None
         super().__init__(app=app)
 
     @classmethod
@@ -118,6 +120,7 @@ class Backend(PGBackend):
         register_adapter(History, HistoryAdapter)
         register_adapter(dict, JsonWithDatetime)
         self.backend_alerters = SpecificBackend(self)
+        self.backend_async_alert = AsyncAlert(self)
 
     def create_alert(self, alert):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)

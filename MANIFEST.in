@@ -1,0 +1,8 @@
+include VERSION
+include LICENSE
+include NOTICE
+include README.md
+include iometrics_alerta/backend/flexiblededup/schema.sql
+exclude .gitignore
+global-exclude *.pyc
+

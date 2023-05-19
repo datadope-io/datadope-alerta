@@ -22,7 +22,7 @@ _alert_task_by_operation = {}
 def get_alert_task_by_operation(operation):
     global _alert_task_by_operation
     if not _alert_task_by_operation:
-        from .bgtasks import event_task, recovery_task, repeat_task, action_task
+        from iometrics_alerta.bgtasks import event_task, recovery_task, repeat_task, action_task
         _alert_task_by_operation.update({
             Alerter.process_event.__name__: event_task,
             Alerter.process_recovery.__name__: recovery_task,
@@ -33,7 +33,7 @@ def get_alert_task_by_operation(operation):
 
 
 def revoke_task(task_id):
-    from .bgtasks import revoke_task
+    from iometrics_alerta.bgtasks import revoke_task
     revoke_task(task_id)
 
 

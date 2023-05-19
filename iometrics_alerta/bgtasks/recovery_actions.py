@@ -17,7 +17,7 @@ from iometrics_alerta.backend.flexiblededup.models.recovery_actions import Recov
 from iometrics_alerta.plugins import Alerter, RetryableException
 from . import app, celery, getLogger, Alert
 from . import revoke_task  # noqa - Provide import to other classes
-from ..recovery_actions.providers import RecoveryActionsProvider, RecoveryActionsResponseStatus, RecoveryActionsResponse
+from iometrics_alerta.plugins.recovery_actions.providers import RecoveryActionsProvider, RecoveryActionsResponseStatus, RecoveryActionsResponse
 
 logger = getLogger(__name__)
 
