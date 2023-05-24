@@ -13,11 +13,11 @@ from celery.utils.log import get_task_logger
 from jinja2 import TemplateNotFound
 
 from alerta.models.alert import Alert
-from iometrics_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
+from datadope_alerta import ContextualConfiguration, ConfigurationContext, VarDefinition, \
     NormalizedDictView, render_template, ALERTERS_KEY_BY_OPERATION, \
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
     AlertIdFilter, GlobalAttributes
-from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
+from datadope_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 
 
 def getLogger(name):  # noqa
@@ -33,7 +33,7 @@ def getLogger(name):  # noqa
     return logger_
 
 
-logger = getLogger('iometrics_alerta.plugins')
+logger = getLogger('datadope_alerta.plugins')
 
 
 class RetryableException(Exception):
@@ -66,12 +66,12 @@ class AlerterStatus(str, Enum):
 
     @classmethod
     def from_db(cls, alert_id, alerter_name):
-        from iometrics_alerta import db_alerters
+        from datadope_alerta import db_alerters
         return AlerterStatus(db_alerters.get_status(alert_id, alerter_name))
 
     @classmethod
     def store(cls, alert_id, alerter, status: 'AlerterStatus') -> 'AlerterStatus':
-        from iometrics_alerta import db_alerters
+        from datadope_alerta import db_alerters
         try:
             record = db_alerters.update_status(alert_id, alerter, status.value)
             if record is None:
@@ -83,7 +83,7 @@ class AlerterStatus(str, Enum):
 
     @classmethod
     def clear(cls, alert_id):
-        from iometrics_alerta import db_alerters
+        from datadope_alerta import db_alerters
         db_alerters.clear_status(alert_id)
 
 

@@ -2,7 +2,7 @@ import os
 import time
 from datetime import datetime, timedelta
 
-from iometrics_alerta import DateTime
+from datadope_alerta import DateTime
 from . import RecoveryActionsProvider, getLogger, RecoveryActionsResponse, RecoveryActionsResponseStatus
 from ... import RetryableException
 
