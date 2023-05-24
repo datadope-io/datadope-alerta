@@ -1,3 +1,7 @@
+# 1.2.0
+
+* Blackouts management
+
 # 1.1.0
 
 * API contexts to read alerters information and to process an alert asynchronously

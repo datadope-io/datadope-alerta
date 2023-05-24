@@ -55,6 +55,7 @@ setup(
         ],
         'alerta.plugins': [
             'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
+            'blackout_manager = iometrics_alerta.plugins.blackouts.plugin:BlackoutManager',
             'recovery_actions = iometrics_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
             'email = iometrics_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = iometrics_alerta.plugins.test_async.test_async_plugin:TestPlugin',
@@ -63,6 +64,9 @@ setup(
         'alerta.recovery_actions.providers': [
             'awx = iometrics_alerta.plugins.recovery_actions.providers.awx:Provider',
             'test = iometrics_alerta.plugins.recovery_actions.providers.test:TestProvider'
+        ],
+        'alerta.blackout.providers': [
+            'internal = iometrics_alerta.plugins.blackouts.providers.internal:Provider'
         ]
     }
 )

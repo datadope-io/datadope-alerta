@@ -40,7 +40,7 @@ def revoke_task(task_id):
 class IOMAlerterPlugin(PluginBase, ABC):
 
     def __init__(self, name=None):
-        name = name or self.__module__.rsplit('.', 1)[0]
+        name = name or self.__module__.rsplit('.', 1)[-1]
         super(IOMAlerterPlugin, self).__init__(name)
         self.logger = logging.getLogger(self.name)
         self.logger.addFilter(AlertIdFilter.get_instance())
