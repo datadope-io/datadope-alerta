@@ -1,3 +1,7 @@
+# 2.0.0
+
+* Change main package name to datadope_alerta
+
 # 1.1.0
 
 * API contexts to read alerters information and to process an alert asynchronously

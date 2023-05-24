@@ -12,7 +12,7 @@ networks:
 services:
   postgres:
     image: postgres:13
-    container_name: iometrics-alerta-postgres
+    container_name: datadope-alerta-postgres
     networks:
       alerta:
         aliases:
@@ -33,7 +33,7 @@ services:
 
   redis:
     image: redis
-    container_name: iometrics-alerta-redis
+    container_name: datadope-alerta-redis
     networks:
       alerta:
         aliases:
@@ -43,13 +43,13 @@ services:
     restart: unless-stopped
 
   server:
-    image: iometrics-alerta-server:${VERSION}
+    image: datadope-alerta-server:${VERSION}
     build:
       context: ..
       dockerfile: deployment/alerta.dockerfile
       args:
         - VERSION=${VERSION}
-    container_name: iometrics-alerta-server
+    container_name: datadope-alerta-server
     networks:
       alerta:
         aliases:
@@ -69,13 +69,13 @@ services:
 
 
   webui:
-    image: iometrics-alerta-webui
+    image: datadope-alerta-webui
     build:
       context: ..
       dockerfile: deployment/webui.dockerfile
       args:
         VERSION: ${VERSION}
-    container_name: iometrics-alerta-webui
+    container_name: datadope-alerta-webui
     networks:
       alerta:
     depends_on:
@@ -87,7 +87,7 @@ services:
       ALERTA_SERVER_ENDPOINT: "${ALERTA_SERVER_ENDPOINT:-http://localhost:8001}"
 
   celery-worker:
-    image: iometrics-alerta-celery:${VERSION}
+    image: datadope-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
@@ -112,13 +112,13 @@ services:
       ALERTACLIENT_CONFIGURATION__TIMEOUT: "20.0"
 
   celery-beat:
-    image: iometrics-alerta-celery:${VERSION}
+    image: datadope-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
       args:
         VERSION: ${VERSION}
-    container_name: iometrics-alerta-celery-beat
+    container_name: datadope-alerta-celery-beat
     networks:
       alerta:
     depends_on:
@@ -137,13 +137,13 @@ services:
       ALERTACLIENT_CONFIGURATION__KEY: "${API_KEY}"
 
   celery-flower:
-    image: iometrics-alerta-celery:${VERSION}
+    image: datadope-alerta-celery:${VERSION}
     build:
       context: ..
       dockerfile: deployment/celery.dockerfile
       args:
         VERSION: ${VERSION}
-    container_name: iometrics-alerta-celery-flower
+    container_name: datadope-alerta-celery-flower
     networks:
       alerta:
     depends_on:

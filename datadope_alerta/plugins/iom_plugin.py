@@ -9,10 +9,10 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Status, Action
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import DateTime, get_config, thread_local, AlertIdFilter, ALERTERS_KEY_BY_OPERATION
-from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC
+from datadope_alerta import DateTime, get_config, thread_local, AlertIdFilter, ALERTERS_KEY_BY_OPERATION
+from datadope_alerta import BGTaskAlerterDataConstants as BGTadC
 # noinspection PyPep8Naming
-from iometrics_alerta import ContextualConfiguration as CC, GlobalAttributes as GAttr
+from datadope_alerta import ContextualConfiguration as CC, GlobalAttributes as GAttr
 from . import Alerter, AlerterStatus, AlerterOperationData
 
 
@@ -22,7 +22,7 @@ _alert_task_by_operation = {}
 def get_alert_task_by_operation(operation):
     global _alert_task_by_operation
     if not _alert_task_by_operation:
-        from iometrics_alerta.bgtasks import event_task, recovery_task, repeat_task, action_task
+        from datadope_alerta.bgtasks import event_task, recovery_task, repeat_task, action_task
         _alert_task_by_operation.update({
             Alerter.process_event.__name__: event_task,
             Alerter.process_recovery.__name__: recovery_task,
@@ -33,7 +33,7 @@ def get_alert_task_by_operation(operation):
 
 
 def revoke_task(task_id):
-    from iometrics_alerta.bgtasks import revoke_task
+    from datadope_alerta.bgtasks import revoke_task
     revoke_task(task_id)
 
 

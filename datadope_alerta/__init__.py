@@ -25,7 +25,7 @@ thread_local = threading.local()
 
 db_alerters = None
 
-logger = logging.getLogger('iometrics_alerta')
+logger = logging.getLogger('datadope_alerta')
 
 ALERTERS_KEY_BY_OPERATION = {
     'process_event': 'new',
@@ -717,7 +717,7 @@ class ContextualConfiguration(object):
 
         :param var_definition: Definition of the configuration attribute to query
         :param alerta.models.alert.Alert alert:
-        :param iometrics_alerta.plugins.iom_plugin.IOMAlerterPlugin plugin:
+        :param datadope_alerta.plugins.iom_plugin.IOMAlerterPlugin plugin:
         :param str operation:
         :return: configuration value and context where it was found
         """
@@ -741,7 +741,7 @@ class ContextualConfiguration(object):
 
         :param var_definition: Definition of the configuration attribute to query
         :param alerta.models.alert.Alert alert:
-        :param iometrics_alerta.plugins.Alerter alerter:
+        :param datadope_alerta.plugins.Alerter alerter:
         :param str operation:
         :return: configuration value and context where it was found
         """

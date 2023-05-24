@@ -4,13 +4,13 @@ from typing import List
 
 from alerta.models.enums import Status
 
-from iometrics_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration
-from iometrics_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
-from iometrics_alerta import thread_local, initialize, AlertIdFilter
-from iometrics_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionData
-from iometrics_alerta.plugins import AlerterStatus
-from iometrics_alerta.plugins.iom_plugin import IOMAlerterPlugin
-from iometrics_alerta.plugins.recovery_actions.plugin import RecoveryActionsPlugin
+from datadope_alerta import CONFIG_PLUGINS, ALERTER_IGNORE, NormalizedDictView, ContextualConfiguration
+from datadope_alerta import GlobalAttributes as GAttr, RecoveryActionsFields
+from datadope_alerta import thread_local, initialize, AlertIdFilter
+from datadope_alerta.backend.flexiblededup.models.recovery_actions import RecoveryActionData
+from datadope_alerta.plugins import AlerterStatus
+from datadope_alerta.plugins.iom_plugin import IOMAlerterPlugin
+from datadope_alerta.plugins.recovery_actions.plugin import RecoveryActionsPlugin
 
 logger = logging.getLogger(__name__)
 

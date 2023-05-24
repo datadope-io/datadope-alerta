@@ -3,8 +3,8 @@ from typing import Any, Dict, Tuple, Optional
 
 from alerta.models.alert import Alert
 
-from iometrics_alerta.plugins import getLogger
-from iometrics_alerta.plugins.iom_plugin import Alerter, IOMSyncAlerterPlugin
+from datadope_alerta.plugins import getLogger
+from datadope_alerta.plugins.iom_plugin import Alerter, IOMSyncAlerterPlugin
 
 
 logger = getLogger(__name__)

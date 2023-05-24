@@ -7,10 +7,10 @@ from alerta.models.alert import Alert
 from alerta.models.enums import Action, Status
 from alerta.plugins import PluginBase
 
-from iometrics_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime, thread_local
-from iometrics_alerta import NormalizedDictView, safe_convert
-from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
-from iometrics_alerta.plugins import getLogger, AlerterStatus
+from datadope_alerta import GlobalAttributes as GAttr, ContextualConfiguration as CConfig, DateTime, thread_local
+from datadope_alerta import NormalizedDictView, safe_convert
+from datadope_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
+from datadope_alerta.plugins import getLogger, AlerterStatus
 
 logger = getLogger(__name__)
 

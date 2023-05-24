@@ -3,7 +3,7 @@ from datetime import datetime
 
 import requests
 
-from iometrics_alerta import RecoveryActionsFields, NormalizedDictView, DateTime
+from datadope_alerta import RecoveryActionsFields, NormalizedDictView, DateTime
 from . import RecoveryActionsProvider, getLogger, RecoveryActionsResponse, RecoveryActionsResponseStatus
 
 logger = getLogger(__name__)

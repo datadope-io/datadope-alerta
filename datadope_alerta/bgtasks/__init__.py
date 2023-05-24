@@ -11,8 +11,8 @@ from alerta.utils.collections import merge  # To provide import for package modu
 # noinspection PyUnresolvedReferences
 from alertaclient.api import Client as AlertaClient  # To provide import for package modules
 
-from iometrics_alerta import initialize, is_initialized
-from iometrics_alerta.plugins import getLogger
+from datadope_alerta import initialize, is_initialized
+from datadope_alerta.plugins import getLogger
 
 
 if not is_initialized():

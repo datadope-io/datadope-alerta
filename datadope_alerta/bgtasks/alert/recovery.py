@@ -1,4 +1,4 @@
-from iometrics_alerta import ALERTERS_KEY_BY_OPERATION
+from datadope_alerta import ALERTERS_KEY_BY_OPERATION
 from . import Alerter, AlerterStatus, AlertTask
 
 # noinspection PyPackageRequirements
