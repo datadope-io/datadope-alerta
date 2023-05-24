@@ -55,6 +55,7 @@ setup(
         ],
         'alerta.plugins': [
             'iom_preprocess = datadope_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
+            'blackout_manager = datadope_alerta.plugins.blackouts.plugin:BlackoutManager',
             'recovery_actions = datadope_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
             'email = datadope_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
@@ -63,6 +64,9 @@ setup(
         'alerta.recovery_actions.providers': [
             'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',
             'test = datadope_alerta.plugins.recovery_actions.providers.test:TestProvider'
+        ],
+        'alerta.blackout.providers': [
+            'internal = datadope_alerta.plugins.blackouts.providers.internal:Provider'
         ]
     }
 )

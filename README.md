@@ -115,6 +115,32 @@ launched instead. It will be in charge of executing the configured recovery acti
 After actions are executed it will leave some time to the alert to be recovered. If the alert is not closed during
 that time, it will launch the configured alerters.
 
+## Blackouts management
+
+A plugin is provided to manage blockouts using different blackout providers.
+This plugin name is 'blackout_manager' and should substitute original Alerta blackout plugin to obtain the extra
+functionality it provides.
+
+A provider named `internal` is included by default with the same functionaily as original Alerta blackout plugin.
+
+Other providers may be configured using entry-point `alerta.blackout.providers` in a setup file. 
+The location of the class implementing the provider must be defined as the entry-point:
+
+```
+        'alerta.blackout.providers': [
+            'internal = iometrics_alerta.plugins.blackouts.providers.internal:Provider'
+        ]
+```
+
+The implementing class must be a subclass of `iomtrics_alerta.plugins.blackouts.BlackoutProvider` which has only
+one method to implement, that should return a boolean indicating if the provided alert is in blackout or not.
+
+Blackout manager will handle if the blackout period ends. If alert is still open when blackout period ends, its status
+will be changed to `open`. 
+This is done using a periodic background task that request each provider if a currently in blackout alert is still in
+blackout.
+
+
 ## Additional API contexts
 
 Several api contexts are provided by Datadope Alerta to support new functionalities:
