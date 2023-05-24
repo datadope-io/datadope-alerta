@@ -26,7 +26,7 @@ setup(
     packages=find_packages(exclude=['tests']),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
-        'requests',
+        'requests>=2.31.0',
         'celery[redis]~=5.2.7'
     ],
     include_package_data=True,

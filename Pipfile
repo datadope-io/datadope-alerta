@@ -7,7 +7,7 @@ name = "pypi"
 alerta-server = {extras=["postgres"], git = "https://github.com/datadope-io/alerta.git"}
 "celery[redis]" = "~=5.2.7"
 alerta = "==8.5.1"  # Client. Needed for periodic background tasks
-requests = "*"
+requests = ">=2.31.0"
 python-dateutil = "*"
 python-ldap = "*"
 

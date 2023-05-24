@@ -195,7 +195,7 @@ python-dotenv = "*"
 pyopenssl = "*"
 # zabbix-alerta = {git = "https://github.com/alerta/zabbix-alerta"}
 # bson = "*"  # Not needed with master version but needed for 8.7.0
-requests = "*"
+requests = "==2.31.0"
 gunicorn = "*"
 flower = "*"
 python-dateutil = "*"
