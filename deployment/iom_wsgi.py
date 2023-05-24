@@ -1,9 +1,9 @@
 from alerta import create_app
-from iometrics_alerta import is_initialized, initialize
+from datadope_alerta import is_initialized, initialize
 
 app = create_app()
 
-from iometrics_alerta.api import iom_api  # noqa isort:skip
+from datadope_alerta.api import iom_api  # noqa isort:skip
 app.register_blueprint(iom_api)
 
 

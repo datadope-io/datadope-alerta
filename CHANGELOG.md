@@ -1,6 +1,7 @@
-# 1.2.0
+# 2.0.0
 
-* Blackouts management
+* Change main package name to datadope_alerta
+* Blackouts management plugin
 
 # 1.1.0
 

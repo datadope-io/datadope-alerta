@@ -1,5 +1,5 @@
 #
-# ALERTA + IOMETRICS_ALERTA LOGGING CONFIGURATION
+# ALERTA + datadope_alerta LOGGING CONFIGURATION
 #
 # To use this configuration file,
 # variable 'LOG_CONFIG_FILE' must be set for alerta referencing this file.
@@ -19,7 +19,7 @@ DEFAULT_LOG_HANDLERS: &log_handlers
 
 # Override level and handlers for specific loggers.
 LOGGERS_SPECIFIC: &loggers
-  iometrics_alerta:
+  datadope_alerta:
     level: *default_log_level
   alerta:
     level: *default_log_level
@@ -44,7 +44,7 @@ LOG_FORMATTER_WSGI: &log_format_wsgi default
 # 'default' is used when logger name has no specific format.
 # If log context is a flask request, DEFAULT_FORMATTER_REQUEST_SUFFIX is concatenated to the logger format.
 DEFAULT_FORMATTER_FORMATS: &default_formatter_formats
-  iometrics_alerta: >-
+  datadope_alerta: >-
     %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s][%(pathname)s:%(lineno)d]]
   alerta: >-
     %(asctime)s|%(levelname)s|%(alert_id)s|%(alerter_name)s|%(operation)s|%(message)s[[%(name)s|%(processName)s][%(pathname)s:%(lineno)d]]
@@ -97,7 +97,7 @@ version: 1
 disable_existing_loggers: true
 formatters:
   default:
-    (): iometrics_alerta.CustomFormatter
+    (): datadope_alerta.CustomFormatter
     formats: *default_formatter_formats
     request_suffix: *default_formatter_request
   simple:
@@ -118,7 +118,7 @@ filters:
   context:
     (): alerta.utils.logging.ContextFilter
   alerta:
-    (): iometrics_alerta.AlertIdFilter
+    (): datadope_alerta.AlertIdFilter
 handlers:
   console:
     class: logging.StreamHandler
