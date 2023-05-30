@@ -1,9 +1,6 @@
-# iometrics-alerta
+# datadope-alerta
 
-**WARNING**: This is a WIP version of the project. It is under construction so important modifications
-may (and will) be done before releasing first version.
-
-## Backend: iometrics-alerta-backend-flexiblededup
+## Backend: iometrics
 
 Backend to connect to POSTGRESQL database that implements a special deduplication mechanism.
 
@@ -46,11 +43,11 @@ considered as duplicated and a new alert is created.
 
 ### Housekeeping 
 
-Housekeeping in modified too, separating housekeeping of expired and closed alerts. Now the time to delete these
+Housekeeping is modified too, separating housekeeping of expired and closed alerts. Now the time to delete these
 two kind of alerts is configured using different configuration properties:
 * `DELETE_EXPIRED_AFTER`: alerta property now configures the time (in seconds) to delete expired alerts.
 Default value is 7200. A value of 0 may be used to not deleting expired alerts.
-* `DELETE_CLOSED_ALGETE`: new property to configure the time (in seconds) to delete closed alerts. If not configured,
+* `DELETE_CLOSED_AFTER`: new property to configure the time (in seconds) to delete closed alerts. If not configured,
 the value of `DELETE_EXPIRED_AFTER` is used. Use a value of 0 to not deleting closed alerts.
 
 ### Configuration
@@ -68,9 +65,9 @@ to execute when a new alert is received and also when the alert is resolved (sta
 
 Asynchronous execution is handled by celery python library using redis as celery broker and results backend.
 
-Alerters must provide a class implementing `iometrics_alerta.plugins.iom_plugin.IOMAlerterPlugin`. 
+Alerters must provide a class implementing `datadope_alerta.plugins.iom_plugin.IOMAlerterPlugin`. 
 This implementation defines the class that implements the alerter specific behaviour which is defined in another class
-that has to implement `iometrics_alerta.plugins.Alerter` and its two main method `process_event` and `process_recovery`. 
+that has to implement `datadope_alerta.plugins.Alerter` and its two main method `process_event` and `process_recovery`. 
 These methods will execute the alerter operations when a new alert or a recovery is received.
 
 Recovery operation will not be executed if a successful event operation has not been executed before for that alert.
@@ -118,30 +115,60 @@ launched instead. It will be in charge of executing the configured recovery acti
 After actions are executed it will leave some time to the alert to be recovered. If the alert is not closed during
 that time, it will launch the configured alerters.
 
+## Blackouts management
 
+A plugin is provided to manage blockouts using different blackout providers.
+This plugin name is 'blackout_manager' and should substitute original Alerta blackout plugin to obtain the extra
+functionality it provides.
+
+A provider named `internal` is included by default with the same functionaily as original Alerta blackout plugin.
+
+Other providers may be configured using entry-point `alerta.blackout.providers` in a setup file. 
+The location of the class implementing the provider must be defined as the entry-point:
+
+```
+        'alerta.blackout.providers': [
+            'internal = iometrics_alerta.plugins.blackouts.providers.internal:Provider'
+        ]
+```
+
+The implementing class must be a subclass of `iomtrics_alerta.plugins.blackouts.BlackoutProvider` which has only
+one method to implement, that should return a boolean indicating if the provided alert is in blackout or not.
+
+Blackout manager will handle if the blackout period ends. If alert is still open when blackout period ends, its status
+will be changed to `open`. 
+This is done using a periodic background task that request each provider if a currently in blackout alert is still in
+blackout.
+
+
+## Additional API contexts
+
+Several api contexts are provided by Datadope Alerta to support new functionalities:
+
+| Context                    | Method | Function                                                                                                               |
+|----------------------------|--------|------------------------------------------------------------------------------------------------------------------------|
+| /alert/<alert_id>/alerters | GET    | Returns alerters information related to an alert                                                                       |
+| /async/alert               | POST   | Receives an alert as in /alert but processes it asynchronously. Returns the id of the task that will process the alert |
+| /async/alert/<bg_task_id>  | GET    | Returns the status of an async alert creation requested using previous context                                         |
+ 
 ## Deployment
 
 ### Package building
 
-Project provides two python packages. One for the routing definition, and another for iometrics backend and plugins.
-Routing must have a specific package name: `alerta_routing`. This is why it has to be build separately from the rest
-of components.
-
-To create the packages, go to the project folder, start the python virtual environment and issue the setup commands:
+Project provides a python package. To create the package, go to the project folder, 
+start the python virtual environment and issue the setup commands:
 
 ```shell
 pipenv shell
-python -m setup_routing bdist_wheel
 python -m setup bdist_wheel
 ```
 
 ### Package installation
 
-Once the packages are build, they can be installed in an alerta python environment:
+One the package is built, it can be installed in an alerta python environment:
 
 ```shell
-pipenv install iometrics-alerta/dist/alerta_routing-1.0.0-py3-none-any.whl
-pipenv install iometrics-alerta/dist/iometrics_alerta-1.0.0-py3-none-any.whl
+pipenv install datadope-alerta/dist/datadope_alerta-2.0.0-py3-none-any.whl
 ```
 
 Or may be included in the Alerta deployment Pipfile.
@@ -168,7 +195,7 @@ python-dotenv = "*"
 pyopenssl = "*"
 # zabbix-alerta = {git = "https://github.com/alerta/zabbix-alerta"}
 # bson = "*"  # Not needed with master version but needed for 8.7.0
-requests = "*"
+requests = "==2.31.0"
 gunicorn = "*"
 flower = "*"
 python-dateutil = "*"
@@ -179,7 +206,7 @@ python-dateutil = "*"
 python_version = "3.10"
 ```
 
-IOMetrics packages may be included in this Pipfile pointing to the wheel files or to the git repo.
+datadope-alerta package may be included in this Pipfile pointing to the wheel file or to the git repo.
 
 ### Configuration
 
@@ -277,7 +304,7 @@ python -m http.server 8000
 
 ### Background tasks execution
 
-To execute background tasks for IOMetrics alerters plugins, at least one celery worker must be running.
+To execute background tasks for Datadope alerters plugins, at least one celery worker must be running.
 
 To run a celery worker the same python environment for alerta may be used. Also, the same configuration file may be 
 used (configuration file in config_example is prepared to run a celery worker consuming from all configured queues).
@@ -285,7 +312,7 @@ used (configuration file in config_example is prepared to run a celery worker co
 The command to run the worker might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" worker --loglevel=debug
+celery -A "datadope_alerta.bgtasks.celery" worker --loglevel=debug
 ```
 
 This command will run a worker that will consume from all the queues defined in configuration file.
@@ -306,7 +333,7 @@ The following periodic tasks will be executed:
 The command to run celery beat process might be (issued inside the pipenv environment):
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
+celery -A "datadope_alerta.bgtasks.celery" beat -s /var/tmp/celerybeat-schedule --loglevel=debug
 ```
 
 
@@ -318,7 +345,7 @@ example Pipfile provided before).
 With this library installed, a server can be launched within the alert/celery pipenv:
 
 ```shell
-celery -A "iometrics_alerta.plugins.bgtasks.celery" flower
+celery -A "datadope_alerta.bgtasks.celery" flower
 ```
 
 Without parameters, the server will listen in port 5555. Use argument `--port` to change the port.
@@ -386,13 +413,13 @@ VERSION=$(cat ../VERSION) docker-compose up -d
 ```
 
 This command will create the following containers:
-* iometrics-alerta-postgres
-* iometrics-alerta-redis
-* iometrics-alerta-server (listening in port 8001 of host computer, port 8000 in container)
-* iometrics-alerta-webui (listening in port 8000 of host computer and in container)
-* iometrics-alerta-celery-worker-1
-* iometrics-alerta-celery-beat (schedules periodic background tasks)
-* iometrics-alerta-celery-flower (UI to manage celery tasks listening in port 5555 of host computer and in container)
+* datadope-alerta-postgres
+* datadope-alerta-redis
+* datadope-alerta-server (listening in port 8001 of host computer, port 8000 in container)
+* datadope-alerta-webui (listening in port 8000 of host computer and in container)
+* datadope-alerta-celery-worker-1
+* datadope-alerta-celery-beat (schedules periodic background tasks)
+* datadope-alerta-celery-flower (UI to manage celery tasks listening in port 5555 of host computer and in container)
 
 The number of celery workers to run may be modified using:
 
@@ -419,9 +446,9 @@ Dockerfiles and needed files to build dockers are available in [deployment](depl
 To create the images:
 
 ```shell
-docker build --build-arg VERSION=$(cat VERSION) -f deployment/alerta.dockerfile -t iometrics-alerta-server:$(cat VERSION)  .
-docker build --build-arg VERSION=$(cat VERSION) -f deployment/celery.dockerfile -t iometrics-alerta-celery:$(cat VERSION) .
-docker build -f deployment/webui.dockerfile -t iometrics-alerta-webui .
+docker build --build-arg VERSION=$(cat VERSION) -f deployment/alerta.dockerfile -t datadope-alerta-server:$(cat VERSION)  .
+docker build --build-arg VERSION=$(cat VERSION) -f deployment/celery.dockerfile -t datadope-alerta-celery:$(cat VERSION) .
+docker build -f deployment/webui.dockerfile -t datadope-alerta-webui .
 ```
 
 These commands must be executed from repository root folder.
@@ -434,12 +461,12 @@ configuration for the installation environment. These env vars can be provided w
 To run a full environment:
 
 ```shell
-docker run -d --rm --name iometrics-alerta-server --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" -p 8001:8000 iometrics-alerta-server
-docker run -d --rm --name iometrics-alerta-celery-worker1 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery
-docker run -d --rm --name iometrics-alerta-celery-worker2 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery
-docker run -d --rm --name iometrics-alerta-celery-beat --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" iometrics-alerta-celery entry_point_celery_beat.sh
-docker run -d --rm --name iometrics-alerta-celery-flower --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf" -p 5555:5555 iometrics-alerta-celery entry_point_celery_flower.sh
-docker run -d --rm --name iometrics-alerta-webui -p 8000:8000 iometrics-alerta-webui
+docker run -d --rm --name datadope-alerta-server --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf" -p 8001:8000 datadope-alerta-server
+docker run -d --rm --name datadope-alerta-celery-worker1 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf" datadope-alerta-celery
+docker run -d --rm --name datadope-alerta-celery-worker2 --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf" datadope-alerta-celery
+docker run -d --rm --name datadope-alerta-celery-beat --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf" datadope-alerta-celery entry_point_celery_beat.sh
+docker run -d --rm --name datadope-alerta-celery-flower --env-file .env -e "ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf" -p 5555:5555 datadope-alerta-celery entry_point_celery_flower.sh
+docker run -d --rm --name datadope-alerta-webui -p 8000:8000 datadope-alerta-webui
 ```
 
 These configuration expects to have a running postgres and redis. The connection with them
@@ -499,7 +526,7 @@ Steps order:
   6. From default value if provided.
 
 If the value obtained if a dict and an operation is provided, returned value will be the one
-related to the operation. The keys for the dictionary should be the values of [ALERTERS_KEY_BY_OPERATION](iometrics_alerta/__init__.py)
+related to the operation. The keys for the dictionary should be the values of [ALERTERS_KEY_BY_OPERATION](datadope_alerta/__init__.py)
 for each operation:
 
 ```python

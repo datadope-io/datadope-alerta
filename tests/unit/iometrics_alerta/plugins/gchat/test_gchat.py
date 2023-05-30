@@ -4,9 +4,9 @@ from unittest.mock import patch
 from alerta import create_app
 from alerta.models.alert import Alert
 
-from iometrics_alerta.plugins.gchat.gchat_plugin import GChatPlugin
+from datadope_alerta.plugins.gchat.gchat_plugin import GChatPlugin
 
-from iometrics_alerta.plugins import getLogger
+from datadope_alerta.plugins import getLogger
 
 logger = getLogger(__name__)
 

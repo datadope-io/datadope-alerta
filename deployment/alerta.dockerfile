@@ -2,14 +2,14 @@ FROM python:3.10-slim AS builder
 
 ARG TARGETPLATFORM
 ARG VERSION
-ENV VERSION=${VERSION:-1.0.0}
+ENV VERSION=${VERSION:-2.0.0}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
 
 # Install dependencies
 RUN apt-get -y update \
-    && apt-get -y install build-essential git libpq-dev
+    && apt-get -y install build-essential git libpq-dev libsasl2-dev python-dev libldap2-dev libssl-dev
 
 # Install pipenv
 RUN pip install --upgrade pip \
@@ -22,15 +22,15 @@ COPY deployment/Pipfile /app/
 RUN pipenv lock \
     && pipenv install --system
 
-# Create packages for iometrics-alerta
-COPY VERSION LICENSE README.md setup*.py /app/
-COPY iometrics_alerta /app/iometrics_alerta
+# Create packages for datadope-alerta
+COPY VERSION LICENSE README.md setup.py MANIFEST.in /app/
+COPY datadope_alerta /app/datadope_alerta
 
 RUN python -m setup bdist_wheel
 
-# Install iometrics-alerta
+# Install datadope-alerta
 WORKDIR /
-RUN pip install /app/dist/iometrics_alerta-${VERSION}-py3-none-any.whl
+RUN pip install /app/dist/datadope_alerta-${VERSION}-py3-none-any.whl
 
 # Cleaning
 RUN apt-get -y purge --auto-remove build-essential \
@@ -41,7 +41,7 @@ FROM python:3.10-slim
 
 ARG TARGETPLATFORM
 
-LABEL io.datadope.name = "iometrics-alerta" \
+LABEL io.datadope.name = "datadope-alerta" \
       io.datadope.vendor = "DataDope" \
       io.datadope.url = "https://www.datadope.io"
 
@@ -49,7 +49,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
 
 # Default values for env vars.
-ENV ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf \
+ENV ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf \
     GUNICORN_BIND=0.0.0.0:8000 \
     GUNICORN_WORKERS=8 \
     GUNICORN_TIMEOUT=600 \
@@ -67,7 +67,7 @@ ENV ALERTA_SVR_CONF_FILE=/etc/iometrics-alerta/alertad.conf \
 COPY --from=builder /usr/local/lib/python3.10/site-packages/ /usr/local/lib/python3.10/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /usr/lib/ /usr/lib/
-COPY config_example/* /etc/iometrics-alerta/
+COPY config_example/* /etc/datadope-alerta/
 
 WORKDIR /app
 COPY deployment/iom_wsgi.py /app/
