@@ -128,11 +128,11 @@ The location of the class implementing the provider must be defined as the entry
 
 ```
         'alerta.blackout.providers': [
-            'internal = iometrics_alerta.plugins.blackouts.providers.internal:Provider'
+            'internal = datadope_alerta.plugins.blackouts.providers.internal:Provider'
         ]
 ```
 
-The implementing class must be a subclass of `iomtrics_alerta.plugins.blackouts.BlackoutProvider` which has only
+The implementing class must be a subclass of `datadope_alerta.plugins.blackouts.BlackoutProvider` which has only
 one method to implement, that should return a boolean indicating if the provided alert is in blackout or not.
 
 Blackout manager will handle if the blackout period ends. If alert is still open when blackout period ends, its status
