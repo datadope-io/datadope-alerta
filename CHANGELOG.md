@@ -2,6 +2,7 @@
 
 * Change main package name to datadope_alerta
 * Blackouts management plugin
+* GCHAT notifier plugin
 
 # 1.1.0
 

@@ -330,7 +330,7 @@ class Alerter(ABC):
 
     def render_value(self, value, alert, operation=None, **kwargs):
         """
-        Helper method for alerters to render a file formatted as Jinja2 template.
+        Helper method for alerters to render a value (dict, list or str) formatted as Jinja2 template.
 
         Template may use the variables:
           * alert: alert object

@@ -1,0 +1,86 @@
+---
+alerter_title: "IOMetrics GChat Alerter"
+
+#default logos configuration
+alerter_logos:
+  iometrics:
+    security: "https://drive.google.com/uc?id=1oss2KjJ5QzO2I0pzU_dI4KcCXCuH51xs"
+    critical: "https://drive.google.com/uc?id=1oss2KjJ5QzO2I0pzU_dI4KcCXCuH51xs"
+    major: "https://drive.google.com/uc?id=1QoNFH2WLH4nINlJKR7x23QEavv-79fMs"
+    minor: "https://drive.google.com/uc?id=1qkqO79VN3exNTYwFg_oxlLvBGoARyM7f"
+    warning: "https://drive.google.com/uc?id=1RVjmYwsveif7vBGS0KQkuHC5D4ycTwUg"
+    indeterminate: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
+    informational: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    normal: "https://drive.google.com/uc?id=1qkqO79VN3exNTYwFg_oxlLvBGoARyM7f"
+    ok: "https://drive.google.com/uc?id=1U95tWuZXUt0IPPOonmpHo6oQvdRE6mn8"
+    cleared: "https://drive.google.com/uc?id=1U95tWuZXUt0IPPOonmpHo6oQvdRE6mn8"
+    debug: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    trace: "https://drive.google.com/uc?id=1S-zMW8Yr5xOK9-76g9FQyc1ltbKN5DRO"
+    unknown: "https://drive.google.com/uc?id=1SkNb18jsVVgOqBLAyhOusWR-8DOMFGmi"
+  zabbix:
+    security: "https://i.imgur.com/pIWU2Dv.png"
+    critical: "https://i.imgur.com/pIWU2Dv.png"
+    major: "https://i.imgur.com/2HYYLSG.png"
+    minor: "https://i.imgur.com/8RACcnC.png"
+    warning: "https://i.imgur.com/8fRX14C.png"
+    indeterminate: "https://i.imgur.com/uj44LrX.png"
+    informational: "https://i.imgur.com/9dmJ570.png"
+    normal: "https://i.imgur.com/8RACcnC.png"
+    ok: "https://i.imgur.com/QsWc2MC.png"
+    cleared: "https://i.imgur.com/QsWc2MC.png"
+    debug: "https://i.imgur.com/9dmJ570.png"
+    trace: "https://i.imgur.com/9dmJ570.png"
+    unknown: "https://i.imgur.com/uj44LrX.png"
+
+
+message_icons:
+  provoked_by: "https://e7.pngegg.com/pngimages/67/430/png-clipart-laptop-computer-monitors-computer-icons-desktop-computers-pc-angle-electronics.png"
+  criticality: "http://cdn.onlinewebfonts.com/svg/img_412390.png"
+  message: "https://www.freeiconspng.com/thumbs/envelope-icon/envelope-icon-0.png"
+  cause: ""
+
+
+cards_template:
+  cardsV2:
+    - cardId: card_one
+      card:
+        header:
+          title: "{{event_title}}"
+          subtitle: "{{event_subtitle}}"
+          imageType: SQUARE
+          imageUrl: "{{event_logo}}"
+          imageAltText: Alert event icon
+        sections:
+          - collapsible: true
+            uncollapsibleWidgetsCount: 5
+            widgets:
+              - decoratedText:
+                  topLabel: Triggered
+                  startIcon:
+                    knownIcon: CLOCK
+                  text: "{{event_time}}"
+              - decoratedText:
+                  topLabel: Provoked By
+                  startIcon:
+                    iconUrl: "{{message_icons.provoked_by}}"
+                  text: "{{alert.resource}}"
+                  wrapText: true
+              - decoratedText:
+                  topLabel: Cause
+                  startIcon:
+                    iconUrl: "{{message_icons.cause}}"
+                  text: "{{alert.event}}"
+              - decoratedText:
+                  topLabel: Criticality
+                  startIcon:
+                    iconUrl: "{{message_icons.criticality}}"
+                  text: "{{alert.severity}}"
+              - textParagraph:
+                  text: Alert Message
+              - divider: { }
+              - decoratedText:
+                  topLabel: Message
+                  startIcon:
+                    iconUrl: "{{message_icons.message}}"
+                  text: "{{message_text}}"
+                  wrapText: true

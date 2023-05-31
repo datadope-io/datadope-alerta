@@ -60,6 +60,7 @@ setup(
             'email = datadope_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
+            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
         ],
         'alerta.recovery_actions.providers': [
             'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',
