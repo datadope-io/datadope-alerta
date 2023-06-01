@@ -5,4 +5,3 @@ include README.md
 include datadope_alerta/backend/flexiblededup/schema.sql
 exclude .gitignore
 global-exclude *.pyc
-

@@ -12,6 +12,7 @@ from . import BLACKOUT_PROVIDERS, BLACKOUT_TASK_INTERVAL, BlackoutProvider
 
 logger = logging.getLogger(__name__)
 
+
 class BlackoutManager(PluginBase):
     _entry_points: dict = None
 
@@ -40,8 +41,8 @@ class BlackoutManager(PluginBase):
 
     @classmethod
     def get_providers(cls, alert, config) -> dict[str, BlackoutProvider]:
-        provider_names =  ContextualConfiguration.get_global_attribute_value(BLACKOUT_PROVIDERS, alert,
-                                                                    None, config)
+        provider_names = ContextualConfiguration.get_global_attribute_value(BLACKOUT_PROVIDERS, alert,
+                                                                            None, config)
         providers = {}
         for name in provider_names:
             provider = cls._entry_points.get(name)

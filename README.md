@@ -140,16 +140,28 @@ will be changed to `open`.
 This is done using a periodic background task that request each provider if a currently in blackout alert is still in
 blackout.
 
+## Contextualizer and Notifier
+A new system used to enrich and/or fulfill the information from incoming alerts following certain predefined rules.
+
+A set of contextual rules can be created using the contextualizer API. Each of these rules will have various fields that
+will help the Notifier plugin to check whether an alert matches any of the predefined rules. 
+More information can be found at [datadope_alerta/plugins/notifier/README.md](datadope_alerta/plugins/notifier/README.md)
+
 
 ## Additional API contexts
 
 Several api contexts are provided by Datadope Alerta to support new functionalities:
 
-| Context                    | Method | Function                                                                                                               |
-|----------------------------|--------|------------------------------------------------------------------------------------------------------------------------|
-| /alert/<alert_id>/alerters | GET    | Returns alerters information related to an alert                                                                       |
-| /async/alert               | POST   | Receives an alert as in /alert but processes it asynchronously. Returns the id of the task that will process the alert |
-| /async/alert/<bg_task_id>  | GET    | Returns the status of an async alert creation requested using previous context                                         |
+| Context                     | Method | Function                                                                                                               |
+|-----------------------------|--------|------------------------------------------------------------------------------------------------------------------------|
+| /alert/<alert_id>/alerters  | GET    | Returns alerters information related to an alert                                                                       |
+| /async/alert                | POST   | Receives an alert as in /alert but processes it asynchronously. Returns the id of the task that will process the alert |
+| /async/alert/<bg_task_id>   | GET    | Returns the status of an async alert creation requested using previous context                                         |
+| /alert_context/rules        | POST   | Adds a new contextual rule to the database                                                                             |
+| /alert_context/rules/<name> | GET    | Returns a contextual rule given a name                                                                                 |
+| /alert_context/rules        | GET    | Returns all the contextual rules                                                                                       |
+| /alert_context/rules/<id>   | PUT    | Updates a contextual rule matching the given ID                                                                        |
+| /alert_context/rules/<id>   | DELETE | Deletes a contextual rule matching the given ID                                                                        |
  
 ## Deployment
 

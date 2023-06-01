@@ -256,6 +256,20 @@ CREATE TABLE IF NOT EXISTS key_value_store (
     value text
 );
 
+CREATE SEQUENCE IF NOT EXISTS alert_contextual_rules_id_seq;
+
+CREATE TABLE IF NOT EXISTS alert_contextual_rules (
+    id integer DEFAULT nextval('alert_contextual_rules_id_seq') PRIMARY KEY,
+    name text NOT NULL UNIQUE,
+    rules jsonb NOT NULL,
+    context jsonb NOT NULL,
+    priority integer NOT NULL,
+    last_check boolean DEFAULT FALSE
+);
+
+ALTER SEQUENCE alert_contextual_rules_id_seq
+OWNED BY alert_contextual_rules.id;
+
 -- Table to store task/alert_id mapping for end-to-end async processing
 
 CREATE TABLE IF NOT EXISTS async_alert (
