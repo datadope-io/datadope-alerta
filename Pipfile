@@ -12,6 +12,9 @@ python-dateutil = "*"
 python-ldap = "*"
 
 [dev-packages]
+pytest = "*"
+pytest-env = "*"
+tox = "*"
 
 [requires]
 python_version = "3.10"

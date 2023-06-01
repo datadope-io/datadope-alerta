@@ -3,6 +3,10 @@
 * Change main package name to datadope_alerta
 * Blackouts management plugin
 * GCHAT notifier plugin
+* Contextualizer API to manage (read, add, delete, update) the rules
+  that will be used by the Notifier plugin.
+* Notifier plugin to compare the rules stored in the database with
+  the incoming alerts in order to enrich the alert's information.
 
 # 1.1.0
 
