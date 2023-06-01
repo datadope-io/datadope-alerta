@@ -20,17 +20,11 @@ TESTING_URLS = {
 class TestGchatMethods:
 
     @pytest.fixture()
-    def setup_app(self):
-        test_app = create_app()
-        with(test_app.app_context()):
-            yield
-
-    @pytest.fixture()
-    def setup_alerter(self, setup_app):
+    def setup_alerter(self, get_app):
         return GChatPlugin().get_alerter_class()('gchat')
 
     @pytest.fixture()
-    def get_alert(self, setup_app):
+    def get_alert(self, get_app):
         return Alert(event='NodeDown', resource='testing_server', id='4981cf48-254f-4e88-8396-027f91dff104',
                      environment='Production', severity='critical', status='open',
                      attributes={'ip': '127.0.0.1',

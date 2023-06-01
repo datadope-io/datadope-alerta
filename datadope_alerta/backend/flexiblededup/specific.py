@@ -5,6 +5,7 @@ from alerta.database.backends.postgres.base import Backend
 from .models.alerters import AlerterOperationData
 from .models.key_value_store import KeyValueParameter
 from .models.recovery_actions import RecoveryActionData
+from .models.rules import ContextualRule
 
 
 # noinspection PyProtectedMember
@@ -201,3 +202,57 @@ class SpecificBackend:
         if record is None:
             record = self.create_key_value(key_value)
         return KeyValueParameter.from_record(record) if record else None
+
+    # ------------------------
+    # Alert contextual rules
+    # ------------------------
+    def get_contextual_rule(self, name: str):
+        query = """
+            SELECT *
+              FROM alert_contextual_rules
+              WHERE name=%(name)s
+        """
+        record = self.backend._fetchone(query, dict(name=name))
+        return ContextualRule.from_record(record) if record else None
+
+    def get_all_contextual_rules(self, limit: int, offset: int):
+        query = """
+            SELECT *
+            FROM alert_contextual_rules
+            ORDER BY priority DESC
+        """
+        records = self.backend._fetchall(query, vars={}, limit=limit, offset=offset)
+        data = []
+        for record in records:
+            data.append(ContextualRule.from_record(record).__dict__)
+        return data
+
+    def update_contextual_rule(self, rule: ContextualRule):
+        update = """
+            UPDATE alert_contextual_rules
+            SET name=%(name)s, rules=%(contextual_rules)s,
+                context=%(context)s, priority=%(priority)s,
+                last_check=%(last_check)s
+            WHERE id=%(id)s 
+            RETURNING *
+        """
+        record = self.backend._updateone(update, vars(rule), returning=True)
+        return KeyValueParameter.from_record(record) if record else None
+
+    def create_contextual_rule(self, rule: ContextualRule):
+        insert = """
+            INSERT INTO alert_contextual_rules (name, rules, context, priority, last_check)
+            VALUES (%(name)s, %(contextual_rules)s, %(context)s, %(priority)s, %(last_check)s)
+            RETURNING *
+         """
+        record = self.backend._insert(insert, vars(rule))
+        return ContextualRule.from_record(record) if record else None
+
+    def delete_contextual_rule(self, rule_id: int):
+        delete = """
+            DELETE FROM alert_contextual_rules
+            WHERE id=%(id)s
+            RETURNING *
+        """
+        resp = self.backend._deleteall(delete, dict(rule_id=rule_id), returning=True)
+        return len(resp) != 0
