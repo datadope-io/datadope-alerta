@@ -5,8 +5,8 @@ import requests  # noqa
 import yaml  # noqa
 from alerta.models.alert import Alert
 
-from iometrics_alerta import get_config, logger, VarDefinition
-from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
+from datadope_alerta import get_config, logger, VarDefinition
+from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
 CONFIG = 'config.yml'
 CONFIG_KEY = 'alerta_config_telegram'
