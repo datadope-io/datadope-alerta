@@ -47,7 +47,7 @@ def is_alert_in_blackout(alert, config):
     providers = BlackoutManager.get_providers(alert, config)
     for name, provider in providers.items():
         try:
-            if provider.is_alert_in_blackout(alert):
+            if provider.is_alert_in_blackout(alert, config):
                 logger.debug("Alert marked in blackout by provider '%s'", name)
                 return True
         except Exception as e:
