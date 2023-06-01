@@ -8,10 +8,15 @@ from alerta.models.alert import Alert
 from datadope_alerta import get_config, logger, VarDefinition
 from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
+TAG_TELEGRAM_BOT = 'TELEGRAM_BOT'
+TAG_TELEGRAM_SOUND = 'TELEGRAM_SOUND'
+TAG_TELEGRAM_CHATS = 'TELEGRAM_CHATS'
+TAG_TELEGRAM_TOKEN = 'TELEGRAM_TOKEN'
+
 CONFIG = 'config.yml'
 CONFIG_KEY = 'alerta_config_telegram'
 
-git
+
 class TelegramAlerter(Alerter):
     _config = None
 
@@ -41,7 +46,7 @@ class TelegramAlerter(Alerter):
         return self._process_alert(Alerter.process_event.__name__, alert)
 
     def _process_alert(self, operation, alert: Alert):
-        chats_list, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_CHATS', var_type=str),
+        chats_list, _ = self.get_contextual_configuration(VarDefinition(TAG_TELEGRAM_CHATS, var_type=str),
                                                           alert,
                                                           operation=operation)
         if not chats_list:
@@ -50,32 +55,37 @@ class TelegramAlerter(Alerter):
 
         chats_list = chats_list.split(',')
 
-        notification_sound, _ = self.get_contextual_configuration(VarDefinition('TELEGRAM_SOUND', var_type=int),
+        notification_sound, _ = self.get_contextual_configuration(VarDefinition(TAG_TELEGRAM_SOUND, var_type=int),
                                                                   alert,
                                                                   operation=operation)
         if not notification_sound:
             notification_sound = 1
 
-        telegram_bot, _ = self.get_contextual_configuration(VarDefinition('BOTS', var_type=str),
-                                                            alert,
-                                                            operation=operation)
-        if not telegram_bot:
-            logger.error("TAG \"BOTS\" NOT EXISTS OR IS EMPTY!")
-            return False, {}
-
-        bot_token = self._config.get('bots').get(telegram_bot, {}).get('token', None)
+        bot_token, _ = self.get_contextual_configuration(VarDefinition(TAG_TELEGRAM_TOKEN, var_type=str),
+                                                         alert,
+                                                         operation=operation)
 
         if not bot_token:
-            logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
-            return False, {}
+            telegram_bot, _ = self.get_contextual_configuration(VarDefinition(TAG_TELEGRAM_BOT, var_type=str),
+                                                                alert,
+                                                                operation=operation)
+            if not telegram_bot:
+                logger.error("TAGS '%s' and '%s' NOT EXIST OR ARE EMPTY! One of them has to be filled",
+                             TAG_TELEGRAM_TOKEN, TAG_TELEGRAM_BOT)
+                return False, {}
 
-        else:
-            message_sections = self.split_message(self.get_message(alert, operation),
-                                                  self._config.get('max_message_characters', 4096))
-            for chat_id in chats_list:
-                for message in message_sections:
-                    self._send_telegram_message(message, bot_token, chat_id, notification_sound,
-                                                trigger_type=operation)
+            bot_token = self._config.get('bots').get(telegram_bot, {}).get('token', None)
+
+            if not bot_token:
+                logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
+                return False, {}
+
+        message_sections = self.split_message(self.get_message(alert, operation),
+                                              self._config.get('max_message_characters', 4096))
+        for chat_id in chats_list:
+            for message in message_sections:
+                self._send_telegram_message(message, bot_token, chat_id, notification_sound,
+                                            trigger_type=operation)
 
         return True, {}
 

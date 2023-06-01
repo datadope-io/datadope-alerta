@@ -26,17 +26,26 @@ This tag is used to specify the chat or chats that you want to send messages to.
 #### TELEGRAM_SOUND
 This tag is used to specify the sound that should be played when the message is received. It is an optional tag, and if not specified, no sound will be played.
 
-#### BOTS
-This tag is used to specify the name of the bot that you want to use. The plugin will search for the token of the bot in the config.yml file.
+#### TELEGRAM_TOKEN
+Token of the bot to use to send messages. It can be omitted if TELEGRAM_BOT is provided.
+
+#### TELEGRAM_BOT
+This tag is used to specify the name of the bot that you want to use. 
+The plugin will search for the token of the bot in the config.yml file. 
+If TELEGRAM_TOKEN is provided, this tag has no effect.
 
 ### Example
 The following is an example of the configuration file for this plugin:
 
 ```
 bots:
-  DataDope_bot:
-    token: 'here goes the token'
+  Datadope_bot:
+    token: 'the_token'
 max_message_characters: 4000
 message_send_timeout_s: 10
 url: https://api.telegram.org/bot%s/sendMessage
 ```
+
+To use this configuration, two options for alert tags can be used:
+`TELEGRAM_TOKEN: the_token` or `TELEGRAM_BOT: Datadope_bot`. 
+Both options have the same effect.

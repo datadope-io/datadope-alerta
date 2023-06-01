@@ -1,11 +1,11 @@
 from unittest.mock import patch
 
-import pytest
+import pytest  # noqa
 import requests
 from alerta import create_app
 from alerta.models.alert import Alert
 
-from iometrics_alerta.plugins.telegram.telegram import TelegramPlugin
+from datadope_alerta.plugins.telegram.telegram import TelegramPlugin
 
 
 class TestTelegramPlugin:

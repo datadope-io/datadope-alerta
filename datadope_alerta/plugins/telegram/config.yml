@@ -1,6 +1,6 @@
 bots:
-  DataDope_bot:
-    token: 5849805127:AAG_rYAexgW-l8ErhthscQl5ezRMuH_yiBE
+  Datadope_bot:
+    token: the_token
 max_message_characters: 4096
 message_send_timeout_s: 10
 url: https://api.telegram.org/bot%s/sendMessage
