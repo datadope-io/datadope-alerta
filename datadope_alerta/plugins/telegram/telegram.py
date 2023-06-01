@@ -11,7 +11,7 @@ from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 CONFIG = 'config.yml'
 CONFIG_KEY = 'alerta_config_telegram'
 
-
+git
 class TelegramAlerter(Alerter):
     _config = None
 
