@@ -3,8 +3,8 @@ from typing import Any, Dict, Tuple, Optional
 
 from alerta.models.alert import Alert
 
-from iometrics_alerta.plugins import getLogger, RetryableException, VarDefinition
-from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
+from datadope_alerta.plugins import getLogger, RetryableException, VarDefinition
+from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
 
 logger = getLogger(__name__)

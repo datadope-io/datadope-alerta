@@ -1,5 +1,6 @@
-from distutils.dir_util import remove_tree
 import os
+from distutils.dir_util import remove_tree
+
 from setuptools import setup, find_packages
 
 
@@ -14,19 +15,19 @@ except:  # noqa
     pass
 
 setup(
-    name="iometrics-alerta",
+    name="datadope-alerta",
     version=read('VERSION'),
-    description='Alerta components for IOMetrics',
+    description='Alerta components customized by Datadope',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     url='https://datadope.io',
     license='GPLv3',
     author='Victor Garcia',
     author_email='victor.garcia@datadope.io',
-    packages=find_packages(),
+    packages=find_packages(exclude=['tests']),
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
-        'requests',
+        'requests>=2.31.0',
         'celery[redis]~=5.2.7'
     ],
     package_data={'': ['*.sql']},
@@ -49,22 +50,27 @@ setup(
     python_requires='>=3.10',
     entry_points={
         'alerta.database.backends': [
-            'iometrics = iometrics_alerta.backend.flexiblededup'
+            'iometrics = datadope_alerta.backend.flexiblededup'
         ],
         'alerta.routing': [
-            'rules = iometrics_alerta.routing.routing:rules'
+            'rules = datadope_alerta.routing.routing:rules'
         ],
         'alerta.plugins': [
-            'iom_preprocess = iometrics_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
-            'recovery_actions = iometrics_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
-            'telegram = iometrics_alerta.plugins.telegram.telegram:TelegramPlugin',
-            'email = iometrics_alerta.plugins.email.email_plugin:EMailPlugin',
-            'test_async = iometrics_alerta.plugins.test_async.test_async_plugin:TestPlugin',
-            'test = iometrics_alerta.plugins.test.test_plugin:TestPlugin',
+            'iom_preprocess = datadope_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
+            'blackout_manager = datadope_alerta.plugins.blackouts.plugin:BlackoutManager',
+            'recovery_actions = datadope_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
+            'email = datadope_alerta.plugins.email.email_plugin:EMailPlugin',
+            'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
+            'telegram = datadope_alerta.plugins.telegram.telegram:TelegramPlugin',
+            'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
+            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
         ],
         'alerta.recovery_actions.providers': [
-            'awx = iometrics_alerta.plugins.recovery_actions.providers.awx:Provider',
-            'test = iometrics_alerta.plugins.recovery_actions.providers.test:TestProvider'
+            'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',
+            'test = datadope_alerta.plugins.recovery_actions.providers.test:TestProvider'
+        ],
+        'alerta.blackout.providers': [
+            'internal = datadope_alerta.plugins.blackouts.providers.internal:Provider'
         ]
     }
 )

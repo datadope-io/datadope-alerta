@@ -254,4 +254,13 @@ USING btree (alert_id, alerter);
 CREATE TABLE IF NOT EXISTS key_value_store (
     key VARCHAR(50) NOT NULL PRIMARY KEY,
     value text
-)
+);
+
+-- Table to store task/alert_id mapping for end-to-end async processing
+
+CREATE TABLE IF NOT EXISTS async_alert (
+    bg_task_id text NOT NULL PRIMARY KEY,
+    alert_id text,
+    errors jsonb,
+    CONSTRAINT async_alert_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
+);

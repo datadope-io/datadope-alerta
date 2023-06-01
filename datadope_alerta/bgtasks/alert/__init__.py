@@ -8,10 +8,10 @@ from celery.utils.time import get_exponential_backoff_interval
 from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
 
 from alerta.models.metrics import Timer
-from iometrics_alerta import BGTaskAlerterDataConstants as BGTadC, ContextualConfiguration, GlobalAttributes
-from iometrics_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
-from iometrics_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
-from iometrics_alerta.plugins import Alerter, AlerterStatus, RetryableException
+from datadope_alerta import BGTaskAlerterDataConstants as BGTadC, ContextualConfiguration, GlobalAttributes
+from datadope_alerta import DateTime, thread_local, ALERTERS_KEY_BY_OPERATION
+from datadope_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
+from datadope_alerta.plugins import Alerter, AlerterStatus, RetryableException
 from .. import app, celery, getLogger, Alert
 # noinspection PyUnresolvedReferences
 from .. import revoke_task  # To provide import to package modules

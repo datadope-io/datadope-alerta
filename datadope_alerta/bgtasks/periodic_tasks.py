@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from iometrics_alerta import CONFIG_AUTO_CLOSE_TASK_INTERVAL, \
+from datadope_alerta import CONFIG_AUTO_CLOSE_TASK_INTERVAL, \
     NormalizedDictView, DEFAULT_AUTO_CLOSE_TASK_INTERVAL, ContextualConfiguration, thread_local
 
 from . import app, celery, db, getLogger, Alert, Status, AlertaClient

@@ -5,8 +5,8 @@ from enum import Enum
 from typing import Optional
 
 from alerta.models.alert import Alert
-from iometrics_alerta import VarDefinition, ContextualConfiguration, merge
-from iometrics_alerta.plugins import getLogger  # noqa
+from datadope_alerta import VarDefinition, ContextualConfiguration, merge
+from datadope_alerta.plugins import getLogger  # noqa
 
 
 class RecoveryActionsResponseStatus(int, Enum):

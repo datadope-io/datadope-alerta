@@ -3,8 +3,8 @@ import re
 from typing import Any, Dict, Tuple, Optional
 
 from alerta.models.alert import Alert
-from iometrics_alerta.plugins import getLogger, VarDefinition
-from iometrics_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
+from datadope_alerta.plugins import getLogger, VarDefinition
+from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
 from .emailer import send_email, simple_email_address_validation
 from ... import NormalizedDictView
