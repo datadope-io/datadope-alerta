@@ -52,10 +52,10 @@ the value of `DELETE_EXPIRED_AFTER` is used. Use a value of 0 to not deleting cl
 
 ### Configuration
 
-To use this database backend, the database schema for connection scheme must be `flexiblededup`:
+To use this database backend, the database schema for connection scheme must be `iometrics`:
 
 ```
-DATABASE_URL = 'flexiblededup://<pg_user>@<pg_server>/<pg_db>?connect_timeout=10&application_name=alerta'
+DATABASE_URL = 'iometrics://<pg_user>@<pg_server>/<pg_db>?connect_timeout=10&application_name=alerta'
 ```
 
 ## Asynchronous plugins

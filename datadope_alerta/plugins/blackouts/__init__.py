@@ -10,11 +10,12 @@ BLACKOUT_TASK_QUEUE =  VarDefinition('blackoutTaskQueue', 'blackout')
 class BlackoutProvider(ABC):
 
     @abstractmethod
-    def is_alert_in_blackout(self, alert: Alert) -> bool:
+    def is_alert_in_blackout(self, alert: Alert, config) -> bool:
         """
         Check if an alert is in a blackout period.
 
         :param alert: Alert to check if it is in blackout
+        :param config: server configuration
         :return: True if alert is considered to be in blackout
         """
         pass
