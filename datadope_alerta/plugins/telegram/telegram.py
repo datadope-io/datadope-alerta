@@ -50,7 +50,7 @@ class TelegramAlerter(Alerter):
                                                           alert,
                                                           operation=operation)
         if not chats_list:
-            logger.error("TAG \"TELEGRAM_CHATS\" NOT EXISTS OR IS EMPTY!")
+            logger.error(TAG_TELEGRAM_CHATS + "NOT EXISTS OR IS EMPTY!")
             return False, {}
 
         chats_list = chats_list.split(',')

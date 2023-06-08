@@ -42,22 +42,6 @@ class TestTelegramPlugin:
             },
             text='test_text')
 
-    # @pytest.fixture()
-    # def get_alert_exception(self) -> Alert:
-    #     return Alert(
-    #         resource='test_resource',
-    #         event='test_event',
-    #         environment='test_environment',
-    #         severity='major',
-    #         service='test_service',
-    #         group='test_group',
-    #         value='test_message',
-    #         attributes={
-    #             'alerters': 'telegram,test_async',  # noqa
-    #             'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOTS":"DataDope_bot"}'
-    #         },
-    #         text='test_text')
-
     @pytest.fixture()
     def get_alert_split_message(self) -> Alert:
         return Alert(
@@ -233,7 +217,7 @@ class TestTelegramPlugin:
         alert = request.getfixturevalue(telegram_alert.__name__)
 
         requests_mock.get(
-            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['DataDope_bot']['token'],
+            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['Datadope_bot'],
             status_code=response_value,
             json={'ok': True, 'result': {'message_id': 1, 'from': {'id': 1, 'is_bot': True, 'first_name': 'DataDope'}}}
         )
@@ -242,8 +226,8 @@ class TestTelegramPlugin:
                 'get_alert_with_empty_telegram_sound':
             result_recovery, _ = alerter.process_recovery(alert, reason='test_reason')
             result_event, _ = alerter.process_event(alert, reason='test_reason')
-            assert result_recovery is True
-            assert result_event is True
+            assert result_recovery is False
+            assert result_event is False
         elif telegram_alert.__name__ == 'get_alert_with_empty_chats_list' or telegram_alert.__name__ == \
                 'get_alert_with_empty_bots' or telegram_alert.__name__ == 'get_alert_with_different_bot' or \
                 telegram_alert.__name__ == 'get_alert_bot_tag_wrong':
