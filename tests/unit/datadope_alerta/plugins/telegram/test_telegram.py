@@ -38,9 +38,43 @@ class TestTelegramPlugin:
             value='test_message',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOTS":"DataDope_bot"}'
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"TELEGRAM_BOT":"Datadope_bot"}'
             },
             text='test_text')
+
+    @pytest.fixture()
+    def get_alert_with_token(self) -> Alert:
+        return Alert(
+            resource='test_resource',
+            event='test_event',
+            environment='test_environment',
+            severity='major',
+            service='test_service',
+            group='test_group',
+            value='test_message',
+            attributes={
+                'alerters': 'telegram,test_async',  # noqa
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"TELEGRAM_TOKEN":"the_token"}'
+            },
+            text='test_text')
+
+    @pytest.fixture()
+    def get_alert_with_bot_and_token(self) -> Alert:
+        return Alert(
+            resource='test_resource',
+            event='test_event',
+            environment='test_environment',
+            severity='major',
+            service='test_service',
+            group='test_group',
+            value='test_message',
+            attributes={
+                'alerters': 'telegram,test_async',  # noqa
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,'
+                             '"TELEGRAM_TOKEN":"the_token", "TELEGRAM_BOT":"Datadope_bot"}'
+            },
+            text='test_text')
+
 
     @pytest.fixture()
     def get_alert_split_message(self) -> Alert:
@@ -54,7 +88,7 @@ class TestTelegramPlugin:
             value='test_message ',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOTS":"DataDope_bot"}'
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"TELEGRAM_BOT":"Datadope_bot"}'
             },
             text='Python is a high-level programming language that was first released in 1991 by Guido van Rossum. '
                  'It is an interpreted language that is widely used for web development, scientific computing, data '
@@ -117,7 +151,7 @@ class TestTelegramPlugin:
             value='test_message',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_SOUND": 0,"BOTS":"DataDope_bot"}'
+                'eventTags': '{"TELEGRAM_SOUND": 0,"TELEGRAM_BOT":"Datadope_bot"}'
             },
             text='test_text')
 
@@ -133,7 +167,7 @@ class TestTelegramPlugin:
             value='test_message',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","BOTS":"DataDope_bot"}'
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_BOT":"Datadope_bot"}'
             },
             text='test_text')
 
@@ -165,7 +199,7 @@ class TestTelegramPlugin:
             value='test_message',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","BOTS":"prueba"}'
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_BOT":"prueba"}'
             },
             text='test_text')
 
@@ -181,7 +215,7 @@ class TestTelegramPlugin:
             value='test_message',
             attributes={
                 'alerters': 'telegram,test_async',  # noqa
-                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOOOTS":"DataDope_bot"}'  # noqa
+                'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"BOOOTS":"Datadope_bot"}'  # noqa
             },
             text='test_text')
 
@@ -211,23 +245,26 @@ class TestTelegramPlugin:
                                                                     (get_alert_with_empty_telegram_sound, 200),
                                                                     (get_alert_with_empty_bots, 500),
                                                                     (get_alert_with_different_bot, 500),
-                                                                    (get_alert_bot_tag_wrong, 500)])
+                                                                    (get_alert_bot_tag_wrong, 500),
+                                                                    (get_alert_with_token, 200),
+                                                                    (get_alert_with_bot_and_token, 200)])
     def test_process_recovery_and_event(self, get_alerter, telegram_alert, response_value, request, requests_mock):
         alerter = get_alerter
         alert = request.getfixturevalue(telegram_alert.__name__)
 
         requests_mock.get(
-            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['Datadope_bot'],
+            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['Datadope_bot']['token'],
             status_code=response_value,
             json={'ok': True, 'result': {'message_id': 1, 'from': {'id': 1, 'is_bot': True, 'first_name': 'DataDope'}}}
         )
 
         if telegram_alert.__name__ == 'get_alert' or telegram_alert.__name__ == \
-                'get_alert_with_empty_telegram_sound':
+                'get_alert_with_empty_telegram_sound' or telegram_alert.__name__ == 'get_alert_with_token' or \
+                telegram_alert.__name__ == 'get_alert_with_bot_and_token':
             result_recovery, _ = alerter.process_recovery(alert, reason='test_reason')
             result_event, _ = alerter.process_event(alert, reason='test_reason')
-            assert result_recovery is False
-            assert result_event is False
+            assert result_recovery is True
+            assert result_event is True
         elif telegram_alert.__name__ == 'get_alert_with_empty_chats_list' or telegram_alert.__name__ == \
                 'get_alert_with_empty_bots' or telegram_alert.__name__ == 'get_alert_with_different_bot' or \
                 telegram_alert.__name__ == 'get_alert_bot_tag_wrong':
@@ -241,7 +278,7 @@ class TestTelegramPlugin:
         alert = get_alert
 
         requests_mock.get(
-            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['DataDope_bot']['token'],
+            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['Datadope_bot']['token'],
             status_code=200,
             json={
                 "error": {
@@ -276,7 +313,7 @@ class TestTelegramPlugin:
         alert = get_alert_split_message
 
         requests_mock.get(
-            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['DataDope_bot']['token'],
+            url='https://api.telegram.org/bot%s/sendMessage' % alerter.config['bots']['Datadope_bot']['token'],
             status_code=200,
             json={'ok': True, 'result': {'message_id': 1, 'from': {'id': 1, 'is_bot': True, 'first_name': 'DataDope'}}}
         )
