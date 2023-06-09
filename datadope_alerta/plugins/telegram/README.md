@@ -34,7 +34,7 @@ This tag is used to specify the name of the bot that you want to use.
 The plugin will search for the token of the bot in the config.yml file. 
 If TELEGRAM_TOKEN is provided, this tag has no effect.
 
-### Example
+### Examples
 The following is an example of the configuration file for this plugin:
 
 ```
@@ -49,3 +49,9 @@ url: https://api.telegram.org/bot%s/sendMessage
 To use this configuration, two options for alert tags can be used:
 `TELEGRAM_TOKEN: the_token` or `TELEGRAM_BOT: Datadope_bot`. 
 Both options have the same effect.
+
+Also, you can use environment variables to configure the bot you are going to use. Here is an example of how you can do it:
+
+```
+TELEGRAM_CONFIG__BOTS={"Datadope_bot": {"token":"the_token"}}
+```

@@ -4,7 +4,6 @@ from typing import Optional, Tuple, Dict, Any
 import requests  # noqa
 import yaml  # noqa
 from alerta.models.alert import Alert
-
 from datadope_alerta import get_config, logger, VarDefinition
 from datadope_alerta.plugins.iom_plugin import Alerter, IOMAlerterPlugin
 
@@ -50,7 +49,7 @@ class TelegramAlerter(Alerter):
                                                           alert,
                                                           operation=operation)
         if not chats_list:
-            logger.error(TAG_TELEGRAM_CHATS + "NOT EXISTS OR IS EMPTY!")
+            logger.error('TAG_TELEGRAM_CHATS NOT EXISTS OR IS EMPTY!')
             return False, {}
 
         chats_list = chats_list.split(',')
@@ -70,8 +69,8 @@ class TelegramAlerter(Alerter):
                                                                 alert,
                                                                 operation=operation)
             if not telegram_bot:
-                logger.error("TAGS '%s' and '%s' NOT EXIST OR ARE EMPTY! One of them has to be filled",
-                             TAG_TELEGRAM_TOKEN, TAG_TELEGRAM_BOT)
+                logger.error(f"TAGS '{TAG_TELEGRAM_TOKEN}' and '{TAG_TELEGRAM_BOT}' NOT EXIST OR ARE EMPTY! "
+                             f"One of them has to be filled")
                 return False, {}
 
             bot_token = self._config.get('bots').get(telegram_bot, {}).get('token', None)
@@ -105,26 +104,26 @@ class TelegramAlerter(Alerter):
         url = self._config.get('url') % bot_token
 
         if not really_sent:
-            logger.info("REQUEST " + trigger_type)
+            logger.info(f"REQUEST {trigger_type}")
 
             try:
                 response = requests.get(url, params=request_params,
                                         timeout=int(self._config.get('message_send_timeout_s', 10)))
                 response.raise_for_status()
             except requests.exceptions.RequestException:
-                logger.warning("ERROR sending message to Telegram: %s" % str(response))
+                logger.debug(f"ERROR sending message to Telegram: {response}")
                 raise
 
             else:
                 warn = False
-                logger.debug("Message sent to Telegram; chat: '{}', message: '{}'".format(chat_id, message))
+                logger.debug(f"Message sent to Telegram; chat: '{chat_id}', message: '{message}'")
                 logger_func = logger.warning if warn else logger.info
                 logger_func("%s", response_message)
 
                 if "ok" in response.json():
                     return response
                 else:
-                    logger.error("ERROR sending message to Telegram: %s" % str(response.json()))
+                    logger.error(f"ERROR sending message to Telegram: {response.json()}")
                     return None
 
     @staticmethod

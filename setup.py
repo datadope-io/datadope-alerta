@@ -30,7 +30,6 @@ setup(
         'requests>=2.31.0',
         'celery[redis]~=5.2.7'
     ],
-    package_data={'': ['*.sql']},
     include_package_data=True,
     zip_safe=False,
     classifiers=[
