@@ -9,7 +9,7 @@ The GChat Alerter plugin processes incoming alerts from any source and
 send a message to one or more Google Chat rooms.
 
 In order for the plugin to be able to send messages to the Google Chat
-rooms, a Webhook must have pre-configured on those rooms.
+rooms, a Webhook must have been pre-configured on said gchat rooms.
 
 ## Configuration
 
