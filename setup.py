@@ -1,5 +1,6 @@
-from distutils.dir_util import remove_tree
 import os
+from distutils.dir_util import remove_tree
+
 from setuptools import setup, find_packages
 
 
@@ -59,6 +60,7 @@ setup(
             'recovery_actions = datadope_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
             'email = datadope_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
+            'telegram = datadope_alerta.plugins.telegram.telegram:TelegramPlugin',
             'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
             'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
         ],
