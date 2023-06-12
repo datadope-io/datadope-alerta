@@ -62,8 +62,7 @@ setup(
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'telegram = datadope_alerta.plugins.telegram.telegram:TelegramPlugin',
             'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
-            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin',
-            'cmdb_context = datadope_alerta.plugins.cmdb_context.cmdb_context:CMDBContextPlugin'
+            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
         ],
         'alerta.recovery_actions.providers': [
             'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',
