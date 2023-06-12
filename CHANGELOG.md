@@ -8,6 +8,8 @@
   that will be used by the Notifier plugin.
 * Notifier plugin to compare the rules stored in the database with
   the incoming alerts in order to enrich the alert's information.
+* CMDBContext plugin to retrieve information from the CMDB regarding the functional information and watchers
+  of the alert's resource.
 
 # 1.1.0
 
