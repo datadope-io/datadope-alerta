@@ -17,6 +17,7 @@ from alerta.utils.format import DateTime
 
 from .specific import SpecificBackend
 from .async_alert import AsyncAlert
+from .external_references import ExternalReferencesBackend
 
 ATTRIBUTE_DEDUPLICATION = 'deduplication'
 ATTRIBUTE_DEDUPLICATION_TYPE = 'deduplicationType'
@@ -58,6 +59,7 @@ class Backend(PGBackend):
         self.dbname = None
         self.backend_alerters = None
         self.backend_async_alert = None
+        self.backend_external_references = None
         super().__init__(app=app)
 
     @classmethod
@@ -121,6 +123,7 @@ class Backend(PGBackend):
         register_adapter(dict, JsonWithDatetime)
         self.backend_alerters = SpecificBackend(self)
         self.backend_async_alert = AsyncAlert(self)
+        self.backend_external_references = ExternalReferencesBackend(self)
 
     def create_alert(self, alert):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)

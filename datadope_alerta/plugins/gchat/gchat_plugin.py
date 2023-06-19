@@ -2,6 +2,7 @@ import os
 import re
 from typing import Optional, Tuple, Dict, Any
 import requests
+# noinspection PyPackageRequirements
 import yaml
 
 from alerta.models.alert import Alert
@@ -34,10 +35,10 @@ class GChatAlerter(Alerter):
         return cls._config
 
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        return self._process_alert(Alerter.process_event.__name__, alert)
+        return self._process_alert(Alerter.process_event.__name__, alert, reason)
 
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        return self._process_alert(Alerter.process_recovery.__name__, alert)
+        return self._process_alert(Alerter.process_recovery.__name__, alert, reason)
 
     def process_repeat(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         return True, {}
@@ -45,7 +46,7 @@ class GChatAlerter(Alerter):
     def process_action(self, alert: Alert, reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
         return super().process_action(alert, reason, action)
 
-    def _process_alert(self, operation, alert: Alert):
+    def _process_alert(self, operation, alert: Alert, reason):
         trigger_severity = alert.severity
         alert_type = alert.event_type
         event_title, event_title_context = \
@@ -73,7 +74,7 @@ class GChatAlerter(Alerter):
             chats_list = self._get_gchat_chats(chats_list)
             message_icons = self._config['message_icons']
             template = self._config['cards_template']
-            message_text = self.get_message(alert, operation)
+            message_text = self.get_message(alert, operation, reason)
             event_message = self.render_value(template, alert, operation, event_logo=event_logo,
                                               message_icons=message_icons,
                                               event_time=event_time, event_title=event_title,

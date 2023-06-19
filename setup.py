@@ -28,7 +28,8 @@ setup(
     install_requires=[
         'alerta-server[postgres] @ git+https://github.com/datadope-io/alerta.git',
         'requests>=2.31.0',
-        'celery[redis]~=5.2.7'
+        'celery[redis]~=5.2.7',
+        'pyzabbix==1.3.0'
     ],
     include_package_data=True,
     zip_safe=False,
@@ -62,7 +63,9 @@ setup(
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'telegram = datadope_alerta.plugins.telegram.telegram:TelegramPlugin',
             'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
-            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin'
+            'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin',
+            'zabbix_base = datadope_alerta.plugins.zabbix.zabbix_plugin:ZabbixBasePlugin',
+            'zabbix = datadope_alerta.plugins.zabbix.zabbix_plugin:ZabbixIOMPlugin'
         ],
         'alerta.recovery_actions.providers': [
             'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',

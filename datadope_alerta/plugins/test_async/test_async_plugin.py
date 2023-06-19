@@ -12,7 +12,8 @@ logger = getLogger(__name__)
 
 class TestAlerter(Alerter):
 
-    def _do_process(self, alert, op):
+    def _do_process(self, alert, op, reason):
+        message = self.get_message(alert, op, reason)
         index, _ = self.get_contextual_configuration(VarDefinition('INDEX', default=0), alert, op)
         sleep, _ = self.get_contextual_configuration(VarDefinition('SLEEP', default=0.0), alert, op)
         time.sleep(sleep)
@@ -33,6 +34,7 @@ class TestAlerter(Alerter):
             retries = self.bgtask.request.retries
             if (retries % 3) != 2:
                 raise RetryableException('Simulating a retryable exception')
+        return message
 
     @classmethod
     def get_default_configuration(cls) -> dict:
@@ -47,24 +49,24 @@ class TestAlerter(Alerter):
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_event'
         try:
-            self._do_process(alert, op)
-            return True, {'test': 'ok'}
+            message = self._do_process(alert, op, reason)
+            return True, {'Event': message}
         finally:
             logger.info("Test: End event")
 
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_recovery'
         try:
-            self._do_process(alert, op)
-            return True, {'test_recovery': 'ok', 'reason': reason}
+            message = self._do_process(alert, op, reason)
+            return True, {'Recovery': message, 'reason': reason}
         finally:
             logger.info("Test: End recovery")
 
     def process_repeat(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         op = 'process_repeat'
         try:
-            self._do_process(alert, op)
-            return True, {'test_repeat': 'ok', 'reason': reason}
+            message = self._do_process(alert, op, reason)
+            return True, {'Repeat': message, 'reason': reason}
         finally:
             logger.info("Test: End Repeat")
 

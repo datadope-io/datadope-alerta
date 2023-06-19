@@ -56,7 +56,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
     def get_alerter_class(self) -> Type[Alerter]:
         pass
 
-    # noinspection PyMethodMayBeStatic
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def register_periodic_tasks(self, config) -> List[Tuple[Callable, float]]:
         return []
 

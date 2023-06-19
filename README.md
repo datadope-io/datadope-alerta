@@ -589,7 +589,40 @@ To render the jinja2 template 4 variables are provided to the renderer that can 
 * `alert`: Alert information as `Alert` object.
 * `attributes`: Alert attributes. It is similar to `alert.attributes` but this variable is provided as a case-insensitive dict, so it should be used instead of `Alert.attributes`.
 * `event_tags`: Value of `eventTags` attribute as a case-insensitive dict.
-* `config`: Alerter configuration as a case-insensitive dict.
+* `alerter_config`: Alerter configuration as a case-insensitive dict.
+* `alerter_name`: Name of the alerter
+* `operation`: Involved operation (`process_event`, `process_recovery`...)
+* `operation_key`: Involved operation kwy (`new`, `recovery`, `repeat`, `action`)
+* `pretty_alert`: alert data json representation
+
 
 Alerters may use provided method of parent class `Alerter.render_template(self, template_path, alert)`. 
 This method will return the result of rendering the template in the provided path with the four variables defined before.
+
+## Alerters: getting alert message
+
+Alerters may use its inherited method `Alerter.get_message()` to get a message associated to the alert
+depending on the current operation, its event tags and the `message` attribute.
+
+For new and repeat operations, `message` attribute is used as source of the message.
+
+For action or recovery operations, `reason` received with the action or attribute `reason` in case of an action
+received without reason, is used as source of message.
+
+This source massage is parsed with the following rules:
+
+1. If event tags `<OPERATION_KEY>_MESSAGE_LINE_#` are available, source message is replaced by the concatenation of those event tags in order and separated by `\n`.
+2. Parts of the source message with the form `{TAG_NAME}` are replaced by the value of the event tag `TAG_NAME` if available.
+3. If event tag `<OPERATION_KEY>_EXTRA_FOOTER` or `EXTRA_FOOTER` is available, the content of that tag is appended at the end of the message.
+4. If event tag `<OPERATION_KEY>_EXTRA_TITLE` or `EXTRA_TITLE` is available, the content of that tag is appended at the end of the first message line.
+5. If event tag `<OPERATION_KEY>_EXTRA_PRE_TITLE` or `EXTRA_PRE_TITLE` is available, the content of that tag is inserted at the beginning of the first message line.
+
+`Aleter.get_message` function will try to obtain a jinja 2 template file. The file location may be configured
+with `template` attribute or configuration parameter, which defaults to `{{ alerter_name }}/{{ operation_key }}.j2` in
+a templates folder configured with setting `ALERTERS_TEMPLATES_LOCATION`.
+
+If a template file is available, parsed `message` and `reason` are provided as variables to the jinja environment, apart from
+the rest of variables indicated in [Rendering templated strings](#rendering-templated-strings).
+
+If no template file is available, parsed message is returned for new and repeat operations, reason is returned for the
+rest.

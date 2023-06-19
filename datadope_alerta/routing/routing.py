@@ -64,6 +64,10 @@ def rules(alert, plugins, config):  # noqa
         if alert.status in (Status.Blackout, Status.Expired):
             # Alerters and recovery actions are not executed during blackout or if expired
             logger.debug("Ignoring alerters for blackout or expired alerts")
+            missing = [x for x in result if x not in plugins]
+            if missing:
+                logger.warning("Some routed plugin is not configured: %s", ', '.join(missing))
+                result = [x for x in result if x in plugins]
             return [plugins[x] for x in result]
 
         alert_attributes = NormalizedDictView(alert.attributes)
@@ -79,17 +83,24 @@ def rules(alert, plugins, config):  # noqa
                 # status change managed by the plugin
                 result.append(_recovery_actions_plugin)
                 logger.debug("Ignoring alerters. Managed by recovery_actions plugin")
+                missing = [x for x in result if x not in plugins]
+                if missing:
+                    logger.warning("Some routed plugin is not configured: %s", ', '.join(missing))
+                    result = [x for x in result if x in plugins]
                 return [plugins[x] for x in result]
             if alert.status != Status.Closed:
                 if ra_status:
                     # Recovery actions already active/executed. Do not involve alerters or recovery action plugin
                     logger.debug("Ignoring alerters. Executing recovering actions")
-                    return [plugins[x] for x in result]
                 else:
                     # Recovery actions not launched yet. Only involve recovery action plugin
                     result.append(_recovery_actions_plugin)
                     logger.debug("Ignoring alerters. Waiting to execute recovery actions.")
-                    return [plugins[x] for x in result]
+                missing = [x for x in result if x not in plugins]
+                if missing:
+                    logger.warning("Some routed plugin is not configured: %s", ', '.join(missing))
+                    result = [x for x in result if x in plugins]
+                return [plugins[x] for x in result]
 
         # Include recovery actions plugin if exists to ensure pre_receive is called.
         # pre_receive must ensure recoveryActions attribute will be formed properly so routing
@@ -138,6 +149,10 @@ def rules(alert, plugins, config):  # noqa
                                    alerter)
         else:
             logger.info("No alerter configured in attribute '%s'", GAttr.ALERTERS.var_name)
+        missing = [x for x in result if x not in plugins]
+        if missing:
+            logger.warning("Some routed plugin is not configured: %s", ', '.join(missing))
+            result = [x for x in result if x in plugins]
         logger.debug("Returning plugins: %s", result)
         return [plugins[x] for x in result]
     finally:

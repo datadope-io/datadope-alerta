@@ -2,6 +2,8 @@ include VERSION
 include LICENSE
 include NOTICE
 include README.md
-include datadope_alerta/backend/flexiblededup/schema.sql
 exclude .gitignore
+graft datadope_alerta
+prune .tox
 global-exclude *.pyc
+global-exclude .*
