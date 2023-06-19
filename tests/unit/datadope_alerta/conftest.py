@@ -1,7 +1,7 @@
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def get_app():
     with pytest.app.app_context():
         yield

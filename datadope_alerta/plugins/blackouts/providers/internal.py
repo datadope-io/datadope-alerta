@@ -3,6 +3,6 @@ from datadope_alerta.plugins.blackouts import BlackoutProvider
 
 class Provider(BlackoutProvider):
 
-    def is_alert_in_blackout(self, alert: Alert) -> bool:
+    def is_alert_in_blackout(self, alert: Alert, config) -> bool:
         return alert.is_blackout()
 

@@ -18,6 +18,7 @@ from datadope_alerta import ContextualConfiguration, ConfigurationContext, VarDe
     alert_pretty_json_string, safe_convert, render_value, ALERTER_SPECIFIC_CONFIG_KEY_SUFFIX, get_config, merge, \
     AlertIdFilter, GlobalAttributes
 from datadope_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
+from datadope_alerta.plugins.event_tags_parser import MessageParserByTags
 
 
 def getLogger(name):  # noqa
@@ -303,6 +304,8 @@ class Alerter(ABC):
 
         Template may use the variables:
           * alert: alert object
+          * message: original message
+          * reason: original reason
           * attributes: alert attributes dict (keys normalized)
           * event_tags: alert eventTags attribute  dict (keys normalized)
           * alerter_config: alerter configuration dict (keys normalized)
@@ -319,6 +322,8 @@ class Alerter(ABC):
         event_tags = self.get_event_tags(alert, operation)
         return render_template(template_path,
                                alert=alert,
+                               message=kwargs.pop('message', ''),
+                               reason=kwargs.pop('reason', ''),
                                attributes=kwargs.pop('attributes', attributes),
                                event_tags=kwargs.pop('event_tags', event_tags),
                                alerter_config=kwargs.pop('alerter_config', self.config),
@@ -360,7 +365,7 @@ class Alerter(ABC):
                             pretty_alert=alert_pretty_json_string(alert),
                             **kwargs)
 
-    def get_message(self, alert: Alert, operation: str, **kwargs) -> str:
+    def get_message(self, alert: Alert, operation: str, reason, **kwargs) -> str:
         """
         Returns message info for the alerta and operation.
 
@@ -370,24 +375,44 @@ class Alerter(ABC):
 
         :param alert: alert to process
         :param operation: processing operation
+        :param reason: received reason for the operation
         :param kwargs: Extra variables to pass to render template method
         :return: Message information
         """
         message = None
+        operation_key = ALERTERS_KEY_BY_OPERATION[operation]
+
+        original_message,_ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
+        if reason:
+            original_reason = reason
+        else:
+            original_reason, _ = self.get_contextual_configuration(ContextualConfiguration.REASON, alert, operation)
+        parser = MessageParserByTags(self.get_event_tags(alert, operation), logger)
+        try:
+            original_message = parser.parse_message(original_message, operation_key)
+        except Exception as e:
+            logger.warning("Error calculating message. Using original: %s", e, exc_info=e)
+        try:
+            original_reason = parser.parse_message(original_reason, operation_key)
+        except Exception as e:
+            logger.warning("Error calculating reason. Using original: %s", e, exc_info=e)
+
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
         if template:
             try:
-                message = self.render_template(template, alert=alert, operation=operation, **kwargs)
+                message = self.render_template(template, alert=alert, operation=operation,
+                                               message=original_message, reason=original_reason,
+                                               **kwargs)
             except TemplateNotFound:
                 logger.info("Template '%s' not found for '%s' Alerter. Using other options to create message",
                             template, self.name)
             except Exception as e:
                 logger.warning("Error rendering template: '%s'. Using other options to create message", e, exc_info=e)
         if message is None:
-            if operation in (Alerter.process_recovery.__name__, Alerter.process_action.__name__):
-                message, _ = self.get_contextual_configuration(ContextualConfiguration.REASON, alert, operation)
+            if operation in (Alerter.process_event.__name__, Alerter.process_repeat.__name__):
+                message = original_message
             else:
-                message, _ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
+                message = original_reason
         return message
 
     def is_dry_run(self, alert: Alert, operation: str) -> bool:

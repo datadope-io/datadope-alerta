@@ -19,6 +19,8 @@ DEFAULT_LOG_HANDLERS: &log_handlers
 
 # Override level and handlers for specific loggers.
 LOGGERS_SPECIFIC: &loggers
+  iometrics_alerta:
+    level: *default_log_level
   datadope_alerta:
     level: *default_log_level
   alerta:
@@ -32,6 +34,8 @@ LOGGERS_SPECIFIC: &loggers
   urllib3:
     level: WARNING
   werkzeug:
+    level: WARNING
+  pyzabbix:
     level: WARNING
 
 # Log formatter to use in the different handlers.

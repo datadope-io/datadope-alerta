@@ -16,11 +16,13 @@ gunicorn = "==20.1.0"
 flower = "==1.2.0"
 python-dateutil = "==2.8.2"
 python-ldap = "*"
+pyzabbix = "==1.3.0"
 
 [dev-packages]
 requests-mock = "*"
 coverage = "*"
 pytest = "*"
+tox = "*"
 
 [requires]
 python_version = "3.10"

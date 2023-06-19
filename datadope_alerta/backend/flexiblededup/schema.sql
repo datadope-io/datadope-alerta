@@ -278,3 +278,16 @@ CREATE TABLE IF NOT EXISTS async_alert (
     errors jsonb,
     CONSTRAINT async_alert_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
 );
+
+-- Table to store references to client event managers to send updates to.
+
+CREATE TABLE IF NOT EXISTS external_references (
+    alert_id text NOT NULL,
+    platform text NOT NULL,
+    reference text NOT NULL,
+    CONSTRAINT external_references_pkey PRIMARY KEY (alert_id, platform, reference),
+    CONSTRAINT external_references_fkey_alert_id FOREIGN KEY(alert_id) REFERENCES alerts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS external_references_by_platform ON external_references
+USING btree (alert_id, platform);

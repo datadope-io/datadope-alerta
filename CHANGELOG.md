@@ -8,6 +8,7 @@
   that will be used by the Notifier plugin.
 * Notifier plugin to compare the rules stored in the database with
   the incoming alerts in order to enrich the alert's information.
+* Zabbix plugin: when closing an alert, close all zabbix events associated to that alert.
 
 # 1.1.0
 

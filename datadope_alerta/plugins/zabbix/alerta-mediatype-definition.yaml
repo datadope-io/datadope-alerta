@@ -1,0 +1,649 @@
+zabbix_export:
+  version: '6.0'
+  date: '2023-06-14T17:09:25Z'
+  media_types:
+    -
+      name: 'IOMetrics Alerta'
+      type: WEBHOOK
+      parameters:
+        -
+          name: alerta_correlate
+        -
+          name: alerta_environment
+          value: '{INVENTORY.DEPLOYMENT.STATUS}'
+        -
+          name: alerta_event
+          value: '{EVENT.NAME}'
+        -
+          name: alerta_group
+          value: '{INVENTORY.SOFTWARE}'
+        -
+          name: alerta_id
+          value: '{EVENT.TAGS.__alerta_id}'
+        -
+          name: alerta_origin
+          value: zabbix
+        -
+          name: alerta_resource
+          value: '{HOST.HOST}'
+        -
+          name: alerta_service
+          value: '{INVENTORY.SOFTWARE.APP.B}'
+        -
+          name: alerta_tags
+        -
+          name: alerta_task_id
+          value: '{EVENT.TAGS.__alerta_task_id}'
+        -
+          name: alerta_text
+          value: '{TRIGGER.STATUS}: {TRIGGER.NAME}'
+        -
+          name: alerta_type
+          value: '{INVENTORY.SOFTWARE.APP.A}'
+        -
+          name: alerta_value
+          value: '{ITEM.LASTVALUE}'
+        -
+          name: alert_message
+          value: '{ALERT.MESSAGE}'
+        -
+          name: alert_subject
+          value: '{ALERT.SUBJECT}'
+        -
+          name: attributes_deduplicationType
+          value: attribute
+        -
+          name: attributes_moreInfo
+          value: '<a href="<PLACE ZABBIX WEB URL>/tr_events.php?triggerid={TRIGGER.ID}&eventid={EVENT.ID}" target="_blank">Zabbix console</a>'
+        -
+          name: attributes_zabbixEventId
+          value: '{EVENT.ID}'
+        -
+          name: attributes_zabbixTriggerId
+          value: '{TRIGGER.ID}'
+        -
+          name: config_api_key
+          value: '<PLACE ALERTA API KEY>'
+        -
+          name: config_async
+          value: '{EVENT.TAGS.ALERTA_ASYNC}'
+        -
+          name: config_url
+          value: '<PLACE ALERTA API URL>'
+        -
+          name: config_user_url
+          value: '<PLACE ALERTA USER URL>'
+        -
+          name: default_alerta_environment
+          value: Production
+        -
+          name: default_alerta_group
+          value: unknown
+        -
+          name: default_alerta_service
+          value: unknown
+        -
+          name: default_alerta_type
+          value: zabbix
+        -
+          name: default_config_async
+          value: 'true'
+        -
+          name: etag.ITEM.VALUE
+          value: '{ITEM.VALUE}'
+        -
+          name: etag_DEDUPLICATION
+          value: '{EVENT.ID}'
+        -
+          name: etag_HOST.HOST
+          value: '{HOST.HOST}'
+        -
+          name: etag_ITEM.LASTVALUE
+          value: '{ITEM.LASTVALUE}'
+        -
+          name: etag_START_ACTION_DELAY_SECONDS
+          value: '180'
+        -
+          name: event_date
+          value: '{EVENT.DATE}'
+        -
+          name: event_nseverity
+          value: '{EVENT.NSEVERITY}'
+        -
+          name: event_recovery_value
+          value: '{EVENT.RECOVERY.VALUE}'
+        -
+          name: event_source
+          value: '{EVENT.SOURCE}'
+        -
+          name: event_tags_json
+          value: '{EVENT.TAGSJSON}'
+        -
+          name: event_time
+          value: '{EVENT.TIME}'
+        -
+          name: event_update_status
+          value: '{EVENT.UPDATE.STATUS}'
+        -
+          name: event_value
+          value: '{EVENT.VALUE}'
+        -
+          name: HTTPProxy
+        -
+          name: severity_for_average
+          value: minor
+        -
+          name: severity_for_disaster
+          value: critical
+        -
+          name: severity_for_high
+          value: major
+        -
+          name: severity_for_information
+          value: informational
+        -
+          name: severity_for_not_classified
+          value: unknown
+        -
+          name: severity_for_warning
+          value: warning
+      max_sessions: '5'
+      script: |
+        var Alerta = {
+            config: {},
+            data: {},
+            attributes: {},
+            event_tags: {},
+        
+            setConfig: function (params) {
+                if (typeof params !== 'object') {
+                    return;
+                }
+        
+                Alerta.config = params;
+                if (typeof Alerta.config.url === 'string') {
+                    if (!Alerta.config.url.endsWith('/')) {
+                        Alerta.config.url += '/';
+                    }
+        
+                //     Alerta.params.url += 'rest/api/latest/';
+                }
+            },
+        
+            setProxy: function (HTTPProxy) {
+                Alerta.HTTPProxy = HTTPProxy;
+            },
+        
+            setData: function (params) {
+                if (typeof params !== 'object') {
+                    return;
+                }
+        
+                Object.keys(params).forEach(function (key) {
+                    value = params[key];
+                    if (value !== 'undefined') {
+                        switch(key) {
+                            case 'severity': 
+                                // TODO: Map severity
+                                Alerta.data[key] = 'major';
+                                break;
+        
+                            case 'timeout':
+                                Alerta.data[key] = parseInt(value);
+                                break;
+        
+                            case 'service':
+                            case 'tags':
+                            case 'correlate':
+                                Alerta.data[key] = value.split(',');
+                                break;
+                            case 'task_id':
+                                break;
+        
+                            default:
+                                Alerta.data[key] = value;
+                                break;
+                        }
+                    }
+                });
+            },
+        
+            setAttributes: function (params) {
+                if (typeof params !== 'object') {
+                    return;
+                }
+        
+                Object.keys(params).forEach(function (key) {
+                    value = params[key];
+                    if (value !== 'undefined') {
+                        switch(key) {
+                            // TODO: Customize attributes
+                            default:
+                                Alerta.attributes[key] = value;
+                                break;
+                        }
+                    }
+                });
+            },
+        
+            setTags: function(etags, event_tags_json) {
+                Object.keys(etags).forEach(function (key) {
+                    value = etags[key];
+                    if (typeof value !== 'undefined' && value !== '') {
+                        Alerta.event_tags[key] = value;
+                    }
+                });
+        
+                if (typeof event_tags_json !== 'undefined' && event_tags_json !== ''
+                    && event_tags_json !== '{EVENT.TAGSJSON}') {
+                    try {
+                        var tags = JSON.parse(event_tags_json);
+        
+                        tags.forEach(function (tag) {
+                            key = tag['tag'];
+                            value = tag['value'];
+                            Alerta.event_tags[key] = value;
+                        });
+                    }
+                    catch (error) {
+                        Zabbix.Log(3, '[ Alerta Webhook ] Wrong EVENT.TAGSJSON: ' + event_tags_json);
+                    }
+                }
+            },
+        
+            getCreateTime: function(event_date, event_time) {
+                offset = new Date().getTimezoneOffset();
+                d = event_date.replace(/\./g, '-') + 'T' + event_time;
+                dobj = new Date(d);
+                dobj = new Date(dobj.getTime() + offset*60000);
+                return dobj.toISOString();
+            },
+        
+        
+            request: function (method, query, data) {
+                ['url', 'api_key'].forEach(function (field) {
+                    if (typeof Alerta.config !== 'object' || typeof Alerta.config[field] === 'undefined'
+                        || Alerta.config[field] === '' ) {
+                        throw 'Required Alerta config param is not set: "' + field + '".';
+                    }
+                });
+        
+                var response,
+                    url = Alerta.config.url + query,
+                    request = new HttpRequest();
+        
+                request.addHeader('Content-Type: application/json');
+                request.addHeader('X-API-Key: ' + Alerta.config.api_key);
+        
+                if (typeof Alerta.HTTPProxy !== 'undefined' && Alerta.HTTPProxy !== '') {
+                    request.setProxy(Alerta.HTTPProxy);
+                }
+        
+                if (typeof data !== 'undefined') {
+                    data = JSON.stringify(data);
+                }
+        
+                Zabbix.Log(4, '[ Alerta Webhook ] Sending request: ' + url + ((typeof data === 'string') ? (' --> ' + data) : ''));
+        
+                switch (method) {
+                    case 'get':
+                        response = request.get(url, data);
+                        break;
+        
+                    case 'post':
+                        response = request.post(url, data);
+                        break;
+        
+                    case 'put':
+                        response = request.put(url, data);
+                        break;
+        
+                    default:
+                        throw 'Unsupported HTTP request method: ' + method;
+                }
+        
+                Zabbix.Log(4, '[ Alerta Webhook ] Received response with status code ' + request.getStatus() + ' --> ' + response);
+        
+                if (response !== null) {
+                    try {
+                        response = JSON.parse(response);
+                    }
+                    catch (error) {
+                        Zabbix.Log(3, '[ Alerta Webhook ] Failed to parse response received from IOmetrics Alerta: ' + error);
+                        response = null;
+                    }
+                }
+        
+                if (request.getStatus() < 200 || request.getStatus() >= 300) {
+                    var message = 'Request failed with status code ' + request.getStatus();
+        
+                    if (response !== null && response.errors
+                        && Object.keys(response.errors).length > 0) {
+                        message += ': ' + JSON.stringify(response.errors);
+                    }
+                    else if (response !== null && response.errorMessages
+                        && Object.keys(response.errorMessages).length > 0) {
+                        message += ': ' + JSON.stringify(response.errorMessages);
+                    }
+                    if (response !== null && response.message) {
+                        message += ' - ' + response.message;
+                    }
+        
+                    throw message + ' Check debug log for more information.';
+                }
+        
+                return {
+                    status: request.getStatus(),
+                    response: response
+                };
+            },
+        
+            createIssue: function(summary, description, alerta_id, event_date, event_time, is_async) {
+                var data = Alerta.data;
+                data['id'] = alerta_id;
+                if (event_date && event_time) {
+                    data['createTime'] = Alerta.getCreateTime(event_date, event_time);
+                }
+                data['attributes'] = Alerta.attributes;
+                data.attributes['eventTags'] = Alerta.event_tags;
+                data.attributes['message'] = description;
+        
+                raw = summary + '\n\n' + description + '\n';
+                if (Object.keys(Alerta.event_tags).length > 0) {
+                    raw = raw +'\n----------\nZabbix Tags:\n\n'
+                    Object.keys(Alerta.event_tags).forEach(function(key) {
+                        value = Alerta.event_tags[key];
+                        raw = raw + key + ': ' + value + '\n';
+                    });
+                }
+                data['rawData'] = raw;
+            
+                context = 'alert';
+                if (is_async) {
+                    context = 'async/' + context;
+                }
+        
+                var result = Alerta.request('post', context, data);
+                if (typeof result.response !== 'object') {
+                    throw 'Cannot create Alerta issue. Check debug log for more information.';
+                }
+                return result.response;
+            },
+        
+            resolveIssue: function(summary, description, alerta_id) {
+                var data = {
+                    action: 'resolve',
+                    text: description
+                };
+                uri = 'alert/' + alerta_id + '/action';
+                var result = Alerta.request('put', uri, data);
+        
+                if (result.response.status !== 'ok') {
+                    throw 'Alerta server returned an error: ' + JSON.stringify(result.response); 
+                }
+            },
+        
+            getIdFromTask: function(task_id) {
+                uri = 'async/alert/' + task_id;
+        
+                var result = Alerta.request('get', uri, {});
+                if (result.response.status !== 'ok') {
+                    throw 'Id not available for task ' + task_id + ': ' + JSON.stringify(result.response); 
+                }
+                return result.response.alert_id;
+            }
+        };
+        
+        try {
+            var params = JSON.parse(value),
+                fields = {},
+                attributes = {},
+                config = {},
+                update = {},
+                etags = {},
+                defaults = {},
+                result = {tags: {}},
+                severities = [
+                    {name: 'not_classified', color: '#97AAB3'},
+                    {name: 'information', color: '#7499FF'},
+                    {name: 'warning', color: '#FFC859'},
+                    {name: 'average', color: '#FFA059'},
+                    {name: 'high', color: '#E97659'},
+                    {name: 'disaster', color: '#E45959'},
+                    {name: 'resolved', color: '#009900'},
+                    {name: 'default', color: '#000000'}
+                ],
+                required_params = [
+                    'alerta_resource', 'alerta_event', 'config_url', 
+                    'config_api_key', 'event_date', 'event_time', 'event_nseverity'
+                ];
+        
+        
+        
+            required_params.forEach(function (required) {
+                if ((typeof params[required] === 'undefined' || params[required] === '') 
+                        && (typeof params['default_' + required] === 'undefined' || params['default_' + required] === '')) {
+                    throw 'Parameter "' + required + '" must be provided and can\'t be empty.';
+                }
+            });
+        
+            Object.keys(params)
+                .forEach(function (key) {
+                    value = params[key];
+                    if ((value === '*UNKNOWN*' || (value.startsWith('{') && value.endsWith('}'))) && (key.startsWith('config_') || (key.startsWith('alerta_')))) {
+                        value = params['default_' + key];
+                        if ((typeof value === 'undefined' || value === '') && (required_params.indexOf(key) !== -1)) {
+                            throw 'Parameter "' + key + '" must be provided but macro is not resolved.';
+                        }
+                    }
+                    if (typeof value !== 'undefined' && value !== '') {
+                        if (key.startsWith('config_')) {
+                            config[key.substring(7)] = value;
+                        }
+                        else if (key.startsWith('alerta_')) {
+                            fields[key.substring(7)] = value;
+                        }
+                        else if (key.startsWith('attributes_')) {
+                            attributes[key.substring(11)] = value;
+                        }
+                        else if (key.startsWith('etag_')) {
+                            etags[key.substring(5)] = value;
+                        }
+                        else if (key.startsWith('event_update_')) {
+                            update[key.substring(13)] = value;
+                        }
+                        else if (key.startsWith('default_')) {
+                            defaults[key.substring(8)] = value;
+                        }
+                    }
+                });
+        
+            Object.keys(defaults)
+                .forEach(function (key) {
+                    var obj, obj_key;
+                    if (key.startsWith('config_')) {
+                        obj = config;
+                        obj_key = key.substring(7);
+                    } 
+                    else if (key.startsWith('alerta_')) {
+                        obj = fields;
+                        obj_key = key.substring(7);
+                    } 
+                    else if (key.startsWith('attributes_')) {
+                        obj = attributes;
+                        obj_key = key.substring(11);
+                    }
+                    else if (key.startsWith('etag_')) {
+                        obj = etags;
+                        obj_key = key.substring(5);
+                    }
+                    else if (key.startsWith('event_update_')) {
+                        obj = update;
+                        obj_key = key.substring(13);
+                    }
+        
+                    if (typeof obj === 'undefined') {
+                        Zabbix.Log(3, '[ Alerta Webhook ] Default value defined for an unexpected variable with key ' + key);
+                    } 
+                    else if ((!(obj_key in obj)) || (typeof obj[obj_key] === 'undefined') || (obj[obj_key] === '')) {
+                        obj[obj_key] = defaults[key];
+                    }
+                });
+        
+        
+            if ([0, 1, 2, 3].indexOf(parseInt(params.event_source)) === -1) {
+                throw 'Incorrect "event_source" parameter given: ' + params.event_source + '\nMust be 0-3.';
+            }
+        
+            // Check {EVENT.VALUE} for trigger-based and internal events.
+            if (params.event_value !== '0' && params.event_value !== '1'
+                && (params.event_source === '0' || params.event_source === '3')) {
+                throw 'Incorrect "event_value" parameter given: ' + params.event_value + '\nMust be 0 or 1.';
+            }
+        
+            // Check {EVENT.UPDATE.STATUS} only for trigger-based events.
+            if (params.event_update_status !== '0' && params.event_update_status !== '1' && params.event_source === '0') {
+                throw 'Incorrect "event_update_status" parameter given: ' + params.event_update_status + '\nMust be 0 or 1.';
+            }
+        
+            if (params.event_source !== '0' && params.event_recovery_value === '0') {
+                throw 'Recovery operations are supported only for trigger-based actions.';
+            }
+        
+            if ([0, 1, 2, 3, 4, 5].indexOf(parseInt(params.event_nseverity)) === -1) {
+                params.event_nseverity = '7';
+            }
+        
+            if (typeof params['severity_for_' + severities[params.event_nseverity].name] !== 'undefined') {
+                fields.severity = params['severity_for_' + severities[params.event_nseverity].name];
+            }
+        
+            is_async = typeof config.async !== 'undefined' && config.async.toLowerCase() === "true";
+        
+            Alerta.setConfig(config);
+            Alerta.setProxy(params.HTTPProxy);
+        
+            if (params.event_source === '0' && params.event_value === '1' && update.status === '0') {
+                // Create issue for trigger-based events.
+                Alerta.setData(fields);
+                Alerta.setAttributes(attributes);
+                Alerta.setTags(etags, params.event_tags_json);
+                response = Alerta.createIssue(params.alert_subject, params.alert_message, 
+                    null, params.event_date, params.event_time, is_async);
+        
+                if (is_async) {
+                    if (response.status !== 'waiting' || typeof response.task_id === 'undefined') {
+                        throw 'Alerta server returned an error: ' + JSON.stringify(response); 
+                    }  
+                    result.tags.__alerta_task_id = response.task_id;
+                } else {
+                    if (response.status !== 'ok' || typeof response.id === 'undefined') {
+                        throw 'Alerta server returned an error: ' + JSON.stringify(response); 
+                    }  
+                    result.tags.__alerta_id = response.id;
+                }
+        
+            }
+            else if (params.event_source === '0' && params.event_value === '0' && update.status === '0') {
+                // Resolve issue for trigger-based events.
+                alerta_id = fields.id;
+                if (!alerta_id) {
+                    alerta_task_id = fields.task_id;
+                    if (!alerta_task_id) {
+                        throw 'Alert id not stored as event tag when event was created';
+                    }
+                    else {
+                        alerta_id = Alerta.getIdFromTask(alerta_task_id);
+                        if (!alerta_id) {
+                            throw 'Alert id not available from task_id' + alerta_task_id;
+                        }
+                        result.tags.__alerta_id = alerta_id;
+                    }
+                }
+                Alerta.resolveIssue(params.alert_subject, params.alert_message, alerta_id);
+            }
+            else if (params.event_source === '0' && update.status === '1') {
+                // Update created issue for trigger-based event.
+                alerta_id = fields.id;
+                if (!alerta_id) {
+                    alerta_task_id = fields.task_id;
+                    if (!alerta_task_id) {
+                        throw 'Alert id not stored as event tag when event was created';
+                    }
+                    else {
+                        alerta_id = Alerta.getIdFromTask(alerta_task_id);
+                        if (!alerta_id) {
+                            throw 'Alert id not available from task_id' + alerta_task_id;
+                        }
+                        result.tags.__alerta_id = alerta_id;
+                    }
+                }
+                Alerta.setData(fields);
+                Alerta.setAttributes(attributes);
+                Alerta.setTags(etags, params.event_tags_json);
+                Alerta.createIssue(params.alert_subject, params.alert_message, 
+                    alerta_id, null, null, is_async);
+            }
+        
+            return JSON.stringify(result);
+        }
+        catch (error) {
+            Zabbix.Log(3, '[ Alerta Webhook ] ERROR: ' + error);
+            throw 'Sending failed: ' + error;
+        }
+      process_tags: 'YES'
+      show_event_menu: 'YES'
+      event_menu_url: 'http://host.docker.internal:8000/alert/{EVENT.TAGS.__alerta_id}'
+      event_menu_name: 'IOMetrics Alerta: {EVENT.TAGS.__alerta_id}'
+      description: |
+        Connection to Alerta
+        
+        * alerta_* -> corresponding fields for Alerta.
+            - id and task_id --> should not be modified
+        * attributes_* -> fields to include as alert.attributes in alerta
+            - moreInfo -> Fill correct URL to access to Zabbix Web from a user browser
+        * config_* -> parameters for connecting to Alerta server. Must be filled in.
+        * etag_* -> fields to include as alert.attributes['eventTags'].
+        * event_* -> parameters needed to process the event. Should not be changed.
+        * HTTPProxy -> Fill it in if a proxy is needed to connect to Alerta server
+        * severoty_* -> Mapping of Zabbix severity with Alerta severity.
+        * default_* -> provide a default value for alerta_, attributes_, etag_ and event_ parameters if they are empty or its value is a not replaced zabbix macro.
+        
+        Special parameters:
+        * config_async/default_config_async: if true it will use Datadope Alerta async webhook. Datadope customization of Alerta must be installed in Alerta platform to work.
+        
+        
+      message_templates:
+        -
+          event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: 'Problem: {EVENT.NAME}'
+          message: |
+            Problem started at {EVENT.TIME} on {EVENT.DATE}
+            Problem name: {EVENT.NAME}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Operational data: {EVENT.OPDATA}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        -
+          event_source: TRIGGERS
+          operation_mode: RECOVERY
+          subject: 'Resolved in {EVENT.DURATION}: {EVENT.NAME}'
+          message: |
+            Problem has been resolved at {EVENT.RECOVERY.TIME} on {EVENT.RECOVERY.DATE}
+            Problem name: {EVENT.NAME}
+            Problem duration: {EVENT.DURATION}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
+        -
+          event_source: TRIGGERS
+          operation_mode: UPDATE
+          subject: 'Updated problem in {EVENT.AGE}: {EVENT.NAME}'
+          message: |
+            {USER.FULLNAME} {EVENT.UPDATE.ACTION} problem at {EVENT.UPDATE.DATE} {EVENT.UPDATE.TIME}.
+            {EVENT.UPDATE.MESSAGE}
+            
+            Current problem status is {EVENT.STATUS}, age is {EVENT.AGE}, acknowledged: {EVENT.ACK.STATUS}.

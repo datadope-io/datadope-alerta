@@ -39,12 +39,12 @@ class TelegramAlerter(Alerter):
         return super().process_action(alert, reason, action)
 
     def process_recovery(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        return self._process_alert(Alerter.process_recovery.__name__, alert)
+        return self._process_alert(Alerter.process_recovery.__name__, alert, reason)
 
     def process_event(self, alert: Alert, reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
-        return self._process_alert(Alerter.process_event.__name__, alert)
+        return self._process_alert(Alerter.process_event.__name__, alert, reason)
 
-    def _process_alert(self, operation, alert: Alert):
+    def _process_alert(self, operation, alert: Alert, reason):
         chats_list, _ = self.get_contextual_configuration(VarDefinition(TAG_TELEGRAM_CHATS, var_type=str),
                                                           alert,
                                                           operation=operation)
@@ -79,7 +79,7 @@ class TelegramAlerter(Alerter):
                 logger.error("CONFIG BOT \"%s\" AND OR TOKEN NOT EXISTS!")
                 return False, {}
 
-        message_sections = self.split_message(self.get_message(alert, operation),
+        message_sections = self.split_message(self.get_message(alert, operation, reason),
                                               self._config.get('max_message_characters', 4096))
         for chat_id in chats_list:
             for message in message_sections:

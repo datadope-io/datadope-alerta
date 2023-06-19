@@ -11,6 +11,24 @@ from datadope_alerta import GlobalAttributes as GAttr, ContextualConfiguration a
 from datadope_alerta import NormalizedDictView, safe_convert
 from datadope_alerta.backend.flexiblededup.models.alerters import AlerterOperationData
 from datadope_alerta.plugins import getLogger, AlerterStatus
+from datadope_alerta.plugins.event_tags_parser import EventTagsParser
+
+SPECIAL_TAGS = [
+    ('DEDUPLICATION', 'deduplication'),
+    ('ACTION_DELAY', 'actionDelay'),
+    ('START_ACTION_DELAY_SECONDS', 'actionDelay'),
+    ('IGNORE_RECOVERY', 'ignoreRecovery'),
+    ('ALERTERS', 'alerters'),
+    ('AUTO_CLOSE_AT', 'autoCloseAt'),
+    ('AUTO_CLOSE_AFTER', 'autoCloseAfter'),
+    ('CONDITION_RESOLVED_MUST_CLOSE', 'conditionResolvedMustClose')
+]
+"""
+Event tags to manage as attributes. 
+First tuple element is the event tag name and second is the corresponding attribute name. 
+Existing event tags from the list are moved to be an attribute.
+"""
+
 
 logger = getLogger(__name__)
 
@@ -32,6 +50,18 @@ class IOMAPreprocessPlugin(PluginBase):
         event_tags_key = GAttr.EVENT_TAGS.var_name
         if event_tags_key in alert_attributes:
             event_tags = safe_convert(alert_attributes[event_tags_key], dict)
+
+            event_id = alert_attributes.get('zabbixEventId', alert_attributes.get('eventId'))
+            event_tags_parser = EventTagsParser(event_tags=event_tags,
+                                                event_id=event_id,
+                                                logger=logger)
+            alert_attributes[event_tags_key] = event_tags_parser.parse()
+
+            # Process special TAGS
+            for tag, attribute in SPECIAL_TAGS:
+                event_tags_norm = NormalizedDictView(event_tags)
+                if tag in event_tags_norm:
+                    alert_attributes[attribute] = event_tags_norm.pop(tag)
             alert_attributes[event_tags_key] = event_tags
 
     @staticmethod
