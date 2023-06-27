@@ -23,6 +23,7 @@ ATTRIBUTE_DEDUPLICATION = 'deduplication'
 ATTRIBUTE_DEDUPLICATION_TYPE = 'deduplicationType'
 ATTRIBUTE_ORIGINAL_ID = 'tempOriginalAlertId'  # If alert is deduplicated, stores the original id.
 ATTRIBUTE_ORIGINAL_VALUE = 'tempOriginalValue'  # temp attribute => not stored
+ATTRIBUTE_INFERRED_CORRELATION = 'inferredCorrelation'
 
 CONFIG_DEFAULT_DEDUPLICATION_TYPE = 'DEFAULT_DEDUPLICATION_TYPE'
 CONFIG_DEFAULT_DEDUPLICATION_TEMPLATE = 'DEFAULT_DEDUPLICATION_TEMPLATE'
@@ -127,7 +128,8 @@ class Backend(PGBackend):
 
     def create_alert(self, alert):
         deduplication = alert.attributes.get(ATTRIBUTE_DEDUPLICATION)
-        if deduplication:
+        inferred_correlation = alert.attributes.get(ATTRIBUTE_INFERRED_CORRELATION)
+        if deduplication or inferred_correlation:
             alert.value = alert.attributes.pop(ATTRIBUTE_ORIGINAL_VALUE, None) or alert.value
         return super(Backend, self).create_alert(alert)
 
@@ -173,6 +175,8 @@ class Backend(PGBackend):
         deduplication = self._get_deduplication_value(alert)
         if deduplication:
             alert.attributes[ATTRIBUTE_DEDUPLICATION] = deduplication
+        inferred_correlation = alert.attributes.get(ATTRIBUTE_INFERRED_CORRELATION)
+        if deduplication or inferred_correlation:
             alert.attributes[ATTRIBUTE_ORIGINAL_VALUE] = alert.value
             alert.value = f"{alert.resource}/{alert.event}/{alert.value if alert.value else '#NO VALUE#'}"
 
@@ -190,6 +194,15 @@ class Backend(PGBackend):
             """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL',
                        dedup_filter=dedup_filter)
         original = self._fetchone(select, vars(alert))
+        if not original:
+            # Check inferred correlation
+            if ATTRIBUTE_INFERRED_CORRELATION in alert.attributes:
+                original_id = alert.attributes[ATTRIBUTE_INFERRED_CORRELATION]
+                if original_id:
+                    if isinstance(original_id, list):
+                        original_id = original_id[0]
+                    original = self.get_alert(original_id,
+                                              customers=([alert.customer] if alert.customer else None))
         if original:
             if original.severity != alert.severity:
                 # Only deduplicate if severity is the same. If not the same => correlate
@@ -249,6 +262,15 @@ class Backend(PGBackend):
             """.format(customer='customer=%(customer)s' if alert.customer else 'customer IS NULL',
                        dedup_filter=dedup_filter)
         original = self._fetchone(select, vars(alert))
+        if not original:
+            # Check inferred correlation
+            if ATTRIBUTE_INFERRED_CORRELATION in alert.attributes:
+                original_id = alert.attributes[ATTRIBUTE_INFERRED_CORRELATION]
+                if original_id:
+                    if isinstance(original_id, list):
+                        original_id = original_id[0]
+                    original = self.get_alert(original_id,
+                                              customers=([alert.customer] if alert.customer else None))
         if original and original.status in (Status.Closed, Status.Expired) and alert.severity not in (
                 Severity.Normal, Severity.Ok, Severity.Cleared):
             # Alerts are not reopened. A new one is created

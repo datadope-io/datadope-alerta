@@ -7,9 +7,11 @@ Backend to connect to POSTGRESQL database that implements a special deduplicatio
 Standard deduplication provided by Alerta deduplicates if environment, resource, event and severity are the same.
 Additionally, it correlates in the same case except if severity is different (apart from using `correlate` alert field).
 
-With this backend an extra option is implemented to deduplicate alerts: having the same environment, two alerts 
-deduplicate if they have the same value of attribute `deduplication` 
+With this backend two extra options are implemented to deduplicate alerts: 
+* Having the same environment, two alerts deduplicate if they have the same value of attribute `deduplication` 
 (if this attribute is part of the alert information).
+* If the alert includes the attribute 'inferredCorrelation' with an alert id or a list of alert ids, 
+alert is deduplicated with that alert id (the first one if the attribute contains a list).
 
 To keep history of deduplicated alerts, alerts having `deduplication` attribute form the `value` field in each
 history element data as `<resource>/<event>/<value>`, so a history element is appended to the alert information

@@ -1,0 +1,91 @@
+{
+  "trigger": {
+    "schedule": {
+      "interval": "10m"
+    }
+  },
+  "input": {
+    "search": {
+      "request": {
+        "search_type": "query_then_fetch",
+        "indices": [
+          "system-*"
+        ],
+        "rest_total_hits_as_int": true,
+        "body": {
+          "size": 0,
+          "query": {
+            "term": {
+              "agent.hostname": "test-norm01"
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": {
+      "ctx.payload.hits.total": {
+        "gte": 100
+      }
+    }
+  },
+  "actions": {
+    "webhook_1": {
+      "webhook": {
+        "scheme": "http",
+        "host": "lab-iometrics01",
+        "port": 8001,
+        "method": "post",
+        "path": "/alert",
+        "params": {},
+        "headers": {
+          "Content-Type": "application/json",
+          "X-API-Key": "TWZvb0txNmstbldxLWY0NjpqaTE="
+        },
+        "body": """{
+        "origin":"elastic",
+        "value":"{{ctx.payload.hits.total}}",
+        "rawData":"{{ctx.payload}}",
+        "resource":"{{ctx.metadata.resource}}",
+        "event":"{{ctx.metadata.event}}",
+        "environment":"{{ctx.metadata.environment}}",
+        "severity":"{{ctx.metadata.severity}}",
+        "group":"{{ctx.metadata.group}}",
+        "type":"{{ctx.metadata.type}}",
+        "service":{{#toJson}}ctx.metadata.service{{/toJson}},
+        "text":"{{ctx.metadata.text}}",
+        "attributes":{{#toJson}}ctx.metadata.attributes{{/toJson}}
+        }"""
+      }
+    }
+  },
+  "metadata": {
+    "severity": "major",
+    "environment": "lab",
+    "resource": "the_hostname",
+    "service": [
+      "tests"
+    ],
+    "attributes": {
+      "deduplicationType": "both",
+      "alerters": "test_async",
+      "autoCloseAfter": 900,
+      "deduplication": "b4350c63-423d-4830-9f7a-41e5200a2bfd",
+      "message": """[TESTING ALERTA]Problema detectado en Hostname, elemento Metric is 0: PROBLEM.
+Nombre item: Metric
+Key: metric
+Ultimo valor:
+0
+
+Descripción del problema:
+
+""",
+      "eventTags": {}
+    },
+    "text": "PROBLEM: Metric is 0",
+    "event": "Metric is 0",
+    "type": "tests",
+    "group": "tests"
+  }
+}

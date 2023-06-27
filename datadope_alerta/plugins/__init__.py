@@ -388,14 +388,15 @@ class Alerter(ABC):
         else:
             original_reason, _ = self.get_contextual_configuration(ContextualConfiguration.REASON, alert, operation)
         parser = MessageParserByTags(self.get_event_tags(alert, operation), logger)
-        try:
-            original_message = parser.parse_message(original_message, operation_key)
-        except Exception as e:
-            logger.warning("Error calculating message. Using original: %s", e, exc_info=e)
-        try:
-            original_reason = parser.parse_message(original_reason, operation_key)
-        except Exception as e:
-            logger.warning("Error calculating reason. Using original: %s", e, exc_info=e)
+        if not alert.origin or not alert.origin.lower().startswith('zxbalerter'):
+            try:
+                original_message = parser.parse_message(original_message, operation_key)
+            except Exception as e:
+                logger.warning("Error calculating message. Using original: %s", e, exc_info=e)
+            try:
+                original_reason = parser.parse_message(original_reason, operation_key)
+            except Exception as e:
+                logger.warning("Error calculating reason. Using original: %s", e, exc_info=e)
 
         template, _ = self.get_contextual_configuration(ContextualConfiguration.TEMPLATE_PATH, alert, operation)
         if template:

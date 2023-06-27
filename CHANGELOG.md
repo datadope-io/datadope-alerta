@@ -1,3 +1,7 @@
+# 2.1.0
+
+* Inferred correlation: support for attribute inferredCorrelation. If received with an alert id, new alert is deduplicated with that alert.
+
 # 2.0.0
 
 * Change main package name to datadope_alerta
