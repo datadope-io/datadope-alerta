@@ -429,6 +429,16 @@ class Backend(PGBackend):
         """
         return [x[0] for x in self._fetchall(select, {}, limit=limit)]
 
+    def get_must_resolve_ids(self, limit=100):
+        select = """
+            SELECT id 
+              FROM alerts
+             WHERE status not in ('closed', 'expired')
+               AND NOT (tags && '{resolved}')
+               AND (attributes->>'autoResolveAt')::timestamptz < current_timestamp
+        """
+        return [x[0] for x in self._fetchall(select, {}, limit=limit)]
+
     def fetchall_no_limit(self, query, vars_):
         """
         Return all matching rows.

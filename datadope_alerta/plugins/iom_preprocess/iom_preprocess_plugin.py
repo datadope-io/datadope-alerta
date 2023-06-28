@@ -21,6 +21,8 @@ SPECIAL_TAGS = [
     ('ALERTERS', 'alerters'),
     ('AUTO_CLOSE_AT', 'autoCloseAt'),
     ('AUTO_CLOSE_AFTER', 'autoCloseAfter'),
+    ('AUTO_RESOLVE_AT', 'autoResolveAt'),
+    ('AUTO_RESOLVE_AFTER', 'autoResolveAfter'),
     ('CONDITION_RESOLVED_MUST_CLOSE', 'conditionResolvedMustClose')
 ]
 """
@@ -96,6 +98,28 @@ class IOMAPreprocessPlugin(PluginBase):
                                    close_at, close_at_key, alert.id, e)
 
     @staticmethod
+    def adapt_auto_resolve(alert, alert_attributes, config):
+        # Prepare auto close properties
+        auto_resolve_after = CConfig.get_global_attribute_value(GAttr.AUTO_RESOLVE_AFTER, alert=alert,
+                                                              global_config=config)
+        resolve_at_key = GAttr.AUTO_RESOLVE_AT.var_name
+        if auto_resolve_after:
+            rec_dt = alert.last_receive_time or alert.receive_time
+            if rec_dt:
+                rec_dt = pytz.utc.localize(rec_dt)
+            else:
+                rec_dt = datetime.now().astimezone(pytz.utc)
+            alert_attributes[resolve_at_key] = rec_dt + timedelta(seconds=auto_resolve_after)
+        if resolve_at_key in alert_attributes:
+            resolve_at = alert_attributes[resolve_at_key]
+            if not isinstance(resolve_at, datetime):
+                try:
+                    alert_attributes[resolve_at_key] = DateTime.parse(str(resolve_at))
+                except ValueError as e:
+                    logger.warning("Cannot parse '%s' to datetime for attribute '%s' in alert '%s': %s",
+                                   resolve_at, resolve_at_key, alert.id, e)
+
+    @staticmethod
     def adapt_recovery_actions(alert, alert_attributes, config):
         # TODO: Adjust Zabbix task to new recoveryAction Attribute
         #
@@ -117,6 +141,7 @@ class IOMAPreprocessPlugin(PluginBase):
             self.adapt_event_tags(alert, alert_attributes)
             self.adapt_alerters(alert, alert_attributes, config)
             self.adapt_auto_close(alert, alert_attributes, config)
+            self.adapt_auto_resolve(alert, alert_attributes, config)
             self.adapt_recovery_actions(alert, alert_attributes, config)
             return alert
         finally:

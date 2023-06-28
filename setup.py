@@ -59,6 +59,7 @@ setup(
             'iom_preprocess = datadope_alerta.plugins.iom_preprocess.iom_preprocess_plugin:IOMAPreprocessPlugin',
             'blackout_manager = datadope_alerta.plugins.blackouts.plugin:BlackoutManager',
             'recovery_actions = datadope_alerta.plugins.recovery_actions.plugin:RecoveryActionsPlugin',
+            'notifier = datadope_alerta.plugins.notifier.notifier_plugin:NotifierPlugin',
             'email = datadope_alerta.plugins.email.email_plugin:EMailPlugin',
             'test_async = datadope_alerta.plugins.test_async.test_async_plugin:TestPlugin',
             'telegram = datadope_alerta.plugins.telegram.telegram:TelegramPlugin',
