@@ -15,7 +15,7 @@ class ContextualizerAPI:
     @staticmethod
     @iom_api.route('/alert_context/rules', methods=['OPTIONS', 'POST'])
     @cross_origin()
-    @permission(Scope.read_alerts)
+    @permission(Scope.write_alerts)
     @jsonp
     def create_rule():
         form = request.json
@@ -28,7 +28,7 @@ class ContextualizerAPI:
     @staticmethod
     @iom_api.route('/alert_context/rules/<name>', methods=['OPTIONS', 'GET'])
     @cross_origin()
-    @permission((Scope.read_alerts, Scope.write_alerts))
+    @permission(Scope.read_alerts)
     @jsonp
     def read_rule(name):
         resp = ContextualRule.one_from_db(name=name)
@@ -37,7 +37,7 @@ class ContextualizerAPI:
     @staticmethod
     @iom_api.route('/alert_context/rules', methods=['OPTIONS', 'GET'])
     @cross_origin()
-    @permission((Scope.read_alerts, Scope.write_alerts))
+    @permission(Scope.read_alerts)
     @jsonp
     def read_all_rules(limit=50, offset=0):
         limit = request.args.get('limit', limit)
@@ -48,7 +48,7 @@ class ContextualizerAPI:
     @staticmethod
     @iom_api.route('/alert_context/rules/<id>', methods=['OPTIONS', 'PUT'])
     @cross_origin()
-    @permission((Scope.read_alerts, Scope.write_alerts))
+    @permission(Scope.write_alerts)
     @jsonp
     def update_rule(rule_id):
         form = request.json
@@ -60,7 +60,7 @@ class ContextualizerAPI:
     @staticmethod
     @iom_api.route('/alert_context/rules/<id>', methods=['OPTIONS', 'DELETE'])
     @cross_origin()
-    @permission((Scope.read_alerts, Scope.write_alerts))
+    @permission(Scope.write_alerts)
     @jsonp
     def delete_rule(rule_id):
         resp = ContextualRule.clear(rule_id)
