@@ -22,6 +22,7 @@ pyzabbix = "==1.3.0"
 requests-mock = "*"
 coverage = "*"
 pytest = "*"
+pytest-env = "*"
 tox = "*"
 
 [requires]

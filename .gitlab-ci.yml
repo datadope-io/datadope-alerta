@@ -2,6 +2,8 @@ build:
   stage: build
   variables:
     IMAGE_SRV_NAME: $CI_PROJECT_NAME
+    IMAGE_UI_NAME: iometrics-alerta-ui
+    VERSION_UI: 8.7.0-datadope.3
   image:
     name: gcr.io/kaniko-project/executor:v1.10.0-debug
     entrypoint: [""]
@@ -14,5 +16,10 @@ build:
       --destination "${REGISTRY}/alerta/${IMAGE_SRV_NAME}:${VERSION}"
       --destination "${REGISTRY}/alerta/${IMAGE_SRV_NAME}:latest"
       --build-arg "VERSION=$VERSION"
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/deployment/webui.dockerfile"
+      --destination "${REGISTRY}/alerta/${IMAGE_UI_NAME}:${VERSION_UI}"
+      --destination "${REGISTRY}/alerta/${IMAGE_UI_NAME}:latest"
   rules:
     - if: $CI_COMMIT_TAG

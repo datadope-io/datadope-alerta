@@ -56,9 +56,9 @@ ENV ALERTA_SVR_CONF_FILE=/etc/datadope-alerta/alertad.conf \
     CELERY_WORKER_LOGLEVEL=info \
     CELERY_BEAT_LOGLEVEL=info \
     CELERY_BEAT_DATABASE=/var/tmp/celerybeat-schedule \
-    AUTO_CLOSE_TASK_INTERVAL=60.0 \
     CELERY_FLOWER_PORT=5555 \
-    CELERY_CONCURRENCY=10
+    CELERY_CONCURRENCY=10 \
+    AUTO_CLOSE_TASK_INTERVAL=60.0
 
 # Env vars that should be provided when running docker:
 # SECRET_KEY
@@ -73,8 +73,7 @@ COPY config_example/* /etc/datadope-alerta/
 
 WORKDIR /app
 COPY deployment/iom_wsgi.py /app/
-COPY deployment/entry_point_alerta.sh /usr/local/bin/
-COPY deployment/entry_point_celery* /usr/local/bin/
+COPY deployment/entry_point_alerta.sh deployment/entry_point_celery* /usr/local/bin/
 
 RUN useradd -ms /bin/bash -u 1000 alerta && \
     chown -R alerta:0 /app
