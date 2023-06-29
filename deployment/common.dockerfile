@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install dependencies
 RUN apt-get -y update \
-    && apt-get -y install build-essential git libpq-dev libsasl2-dev python-dev libldap2-dev libssl-dev
+    && apt-get -y install build-essential git libpq-dev libsasl2-dev libldap2-dev libssl-dev
 
 # Install pipenv
 RUN pip install --upgrade pip \
