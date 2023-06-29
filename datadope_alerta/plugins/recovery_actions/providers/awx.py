@@ -3,7 +3,7 @@ from datetime import datetime
 
 import requests
 
-from datadope_alerta import RecoveryActionsFields, NormalizedDictView, DateTime
+from datadope_alerta import NormalizedDictView, DateTime
 from . import RecoveryActionsProvider, getLogger, RecoveryActionsResponse, RecoveryActionsResponseStatus
 
 logger = getLogger(__name__)
@@ -99,9 +99,8 @@ class Provider(RecoveryActionsProvider):
                                                response_data=response_info)
 
     def launch_new_job(self, alert, actions, recovery_actions_config) -> RecoveryActionsResponse:
-        job_config = recovery_actions_config.get(RecoveryActionsFields.EXTRA_CONFIG.var_name, {})
-        data = json.dumps(self.create_awx_data(alert, actions, job_config))
-        url = self.create_launch_url(job_config)
+        data = json.dumps(self.create_awx_data(alert, actions, recovery_actions_config))
+        url = self.create_launch_url(recovery_actions_config)
         return self.execute_job(url, data)
 
     def retry_job(self, job_id) -> RecoveryActionsResponse:

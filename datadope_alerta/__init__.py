@@ -53,6 +53,16 @@ Default: 60 sec.
 
 DEFAULT_AUTO_CLOSE_TASK_INTERVAL = 60.0
 
+CONFIG_AUTO_RESOLVE_TASK_INTERVAL = 'AUTO_RESOLVE_TASK_INTERVAL'
+"""
+Configuration var for the interval of the periodic task to manage auto resolve of alerts.
+
+Default: 60 sec.
+"""
+
+DEFAULT_AUTO_RESOLVE_TASK_INTERVAL = 60.0
+
+
 ALERTER_DEFAULT_CONFIG_VALUE_PREFIX = 'ALERTERS_DEFAULT_'
 """
 Default value for an alerter of a configuration parameter will be formed 
@@ -498,6 +508,19 @@ class GlobalAttributes:
     Seconds from the last time an alert is received when it must change its status to 'Closed'.
     
     If this attribute is provided, attribute GlobalAttributes.AUTO_CLOSE_AT will be filled or replaced with the
+    instant resulting of adding this value to the time when the alert was received.
+    """
+
+    AUTO_RESOLVE_AT = VarDefinition('autoResolveAt', default=None, var_type=datetime)
+    """
+    Instant where alert must execute 'resolve' action.
+    """
+
+    AUTO_RESOLVE_AFTER = VarDefinition('autoResolveAfter', default=None, var_type=float)
+    """
+    Seconds from the last time an alert is received when it must execute a 'resolve' action.
+
+    If this attribute is provided, attribute GlobalAttributes.AUTO_RESOLVE_AT will be filled or replaced with the
     instant resulting of adding this value to the time when the alert was received.
     """
 

@@ -7,9 +7,11 @@ Backend to connect to POSTGRESQL database that implements a special deduplicatio
 Standard deduplication provided by Alerta deduplicates if environment, resource, event and severity are the same.
 Additionally, it correlates in the same case except if severity is different (apart from using `correlate` alert field).
 
-With this backend an extra option is implemented to deduplicate alerts: having the same environment, two alerts 
-deduplicate if they have the same value of attribute `deduplication` 
+With this backend two extra options are implemented to deduplicate alerts: 
+* Having the same environment, two alerts deduplicate if they have the same value of attribute `deduplication` 
 (if this attribute is part of the alert information).
+* If the alert includes the attribute 'inferredCorrelation' with an alert id or a list of alert ids, 
+alert is deduplicated with that alert id (the first one if the attribute contains a list).
 
 To keep history of deduplicated alerts, alerts having `deduplication` attribute form the `value` field in each
 history element data as `<resource>/<event>/<value>`, so a history element is appended to the alert information
@@ -83,19 +85,21 @@ launched.
 
 ## Special attribute list
 
-| Attribute               | Type                  | Scope   | Meaning                                                                                          |
-|-------------------------|-----------------------|---------|--------------------------------------------------------------------------------------------------|
-| deduplication           | string                | Global  |                                                                                                  |
-| deduplicationType       | 'both' or 'attribute' | Global  |                                                                                                  |
-| alerters                | list \ json           | Global  |                                                                                                  |
-| eventTags               | dict \ json           | Global  |                                                                                                  |
-| autoCloseAt             | datetime              | Global  |                                                                                                  |
-| autoCloseAfter          | float (seconds)       | Global  | Fills / replaces `autoCloseAt` with last_received_time + value                                   |
-| ignoreRecovery          | bool                  | Alerter |                                                                                                  |
-| actionDelay             | float                 | Alerter |                                                                                                  | 
-| tasksDefinition         | dict \ json           | Alerter |                                                                                                  |
-| repeatMinInterval       | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event                                     |
-| recoveryActions         | dict \ json           | Global  | Recovery actions definition                                                                      |
+| Attribute         | Type                  | Scope   | Meaning                                                          |
+|-------------------|-----------------------|---------|------------------------------------------------------------------|
+| deduplication     | string                | Global  |                                                                  |
+| deduplicationType | 'both' or 'attribute' | Global  |                                                                  |
+| alerters          | list \ json           | Global  |                                                                  |
+| eventTags         | dict \ json           | Global  |                                                                  |
+| autoCloseAt       | datetime              | Global  |                                                                  |
+| autoCloseAfter    | float (seconds)       | Global  | Fills / replaces `autoCloseAt` with last_received_time + value   |
+| autoResolveAt     | datetime              | Global  |                                                                  |
+| autoResolveAfter  | float (seconds)       | Global  | Fills / replaces `autoResolveAt` with last_received_time + value |
+| ignoreRecovery    | bool                  | Alerter |                                                                  |
+| actionDelay       | float                 | Alerter |                                                                  | 
+| tasksDefinition   | dict \ json           | Alerter |                                                                  |
+| repeatMinInterval | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event     |
+| recoveryActions   | dict \ json           | Global  | Recovery actions definition                                      |
 
 Scope 'Alerter' means that the attribute value may be defined specifically for every alerter 
 while 'Global' means that the same value will be used independently of the alerter.
@@ -180,7 +184,7 @@ python -m setup bdist_wheel
 One the package is built, it can be installed in an alerta python environment:
 
 ```shell
-pipenv install datadope-alerta/dist/datadope_alerta-2.0.0-py3-none-any.whl
+pipenv install datadope-alerta/dist/datadope_alerta-2.1.0-py3-none-any.whl
 ```
 
 Or may be included in the Alerta deployment Pipfile.
@@ -338,9 +342,10 @@ tasks that the worker will be able to run.
 Apart from the workers, a celery beat process must also be started to manage scheduling of periodic tasks. 
 The following periodic tasks will be executed:
 
-| Task       | Interval config var                  | Operation                                                       |
-|------------|--------------------------------------|-----------------------------------------------------------------|
-| auto close | AUTO_CLOSE_TASK_INTERVAL (def 1 min) | Check if any alert is configured for auto close after some time |
+| Task         | Interval config var                    | Operation                                                         |
+|--------------|----------------------------------------|-------------------------------------------------------------------|
+| auto close   | AUTO_CLOSE_TASK_INTERVAL (def 1 min)   | Check if any alert is configured for auto close after some time   |
+| auto resolve | AUTO_RESOLVE_TASK_INTERVAL (def 1 min) | Check if any alert is configured for auto resolve after some time |
 
 The command to run celery beat process might be (issued inside the pipenv environment):
 

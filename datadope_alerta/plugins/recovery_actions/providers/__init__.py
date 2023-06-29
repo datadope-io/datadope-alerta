@@ -42,7 +42,7 @@ class RecoveryActionsProvider(ABC):
         super().__init__()
         self.app_config = app_config
         default_config = self.get_default_config() or {}
-        config = self.get_config(f"RA_PROVIDER_{name.upper()}_CONFIG") or {}
+        config = self.get_config(f"RA_PROVIDER_{name.upper()}_CONFIG", type_=dict) or {}
         self.config = merge(default_config, config)
 
     def get_config(self, var_name, type_=None, default=None):
