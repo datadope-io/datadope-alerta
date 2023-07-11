@@ -1,6 +1,7 @@
 # 2.2.0
 
 * FIX: Environment processing now admits a key with a dict and a key as a dict field of the same dict.
+* Alerts dependencies: data structure to store alerts dependencies in order to check if an alert is dependent of another alert.
 
 # 2.1.0
 
