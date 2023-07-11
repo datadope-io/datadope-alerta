@@ -289,7 +289,7 @@ class SpecificBackend:
             RETURNING *
         """
         record = self.backend._updateone(update, vars(alert_dependency), returning=True)
-        return KeyValueParameter.from_record(record) if record else None
+        return AlertDependency.from_record(record) if record else None
 
     def create_alert_dependency(self, alert_dependency: AlertDependency):
         insert = """

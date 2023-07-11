@@ -47,6 +47,23 @@ class TestsContextualizer:
                 yield
 
     @pytest.fixture()
+    def get_request_with_body_update(self):
+        dependencies = [
+            {
+                'resource': 'resource0232',
+                'event': 'event0232'
+            }
+        ]
+        with pytest.app.app_context():
+            with pytest.app.test_request_context(json={
+                'resource': 'resource012',
+                'event': 'event012',
+                'dependencies': json.dumps(dependencies)
+            }
+            ):
+                yield
+
+    @pytest.fixture()
     def get_request(self):
         with pytest.app.app_context():
             with pytest.app.test_request_context():
@@ -87,3 +104,7 @@ class TestsContextualizer:
     def test_add_alert_dependency_fails(self, get_request, set_up_api):
         with pytest.raises(Exception):
             set_up_api.create_rule()
+
+    def test_update_alert_dependency(self, get_request_with_body_update, set_up_api):
+        response = set_up_api.update_alert_dependency('resource012', 'event012')
+        assert response.json['dependencies'] == [{'event': 'event0232', 'resource': 'resource0232'}]
