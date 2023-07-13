@@ -1009,7 +1009,7 @@ class ContextualConfiguration(object):
 
 def preprocess_environment():
     processed_env = NormalizedDictView({})
-    for k, v in os.environ.items():
+    for k, v in dict(sorted(os.environ.items())).items():
         parent, _, child = k.partition('__')
         if parent and child:
             parsed_value = None
@@ -1030,7 +1030,17 @@ def preprocess_environment():
                     parsed_value = False
             if parsed_value is None:
                 parsed_value = v
+            if parent in processed_env:
+                current = processed_env[parent]
+                if not isinstance(current, dict):
+                    try:
+                        current = json.loads(current)
+                        processed_env[parent] = current
+                    except json.JSONDecodeError:
+                        processed_env[k] = v
+                        continue
             processed_env.setdefault(parent, {})[child.lower()] = parsed_value
+
         else:
             processed_env[k] = v
     return processed_env

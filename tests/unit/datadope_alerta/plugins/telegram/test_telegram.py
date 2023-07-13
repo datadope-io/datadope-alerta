@@ -36,8 +36,7 @@ class TestTelegramPlugin:
             service='test_service',
             group='test_group',
             value='test_message',
-            attributes={
-                'alerters': 'telegram,test_async',  # noqa
+            attributes={'alerters': 'telegram,test_async',  # noqa
                 'eventTags': '{"TELEGRAM_CHATS":"@pruebaDataDope","TELEGRAM_SOUND": 0,"TELEGRAM_BOT":"Datadope_bot"}'
             },
             text='test_text')

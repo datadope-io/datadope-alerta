@@ -291,3 +291,11 @@ CREATE TABLE IF NOT EXISTS external_references (
 
 CREATE INDEX IF NOT EXISTS external_references_by_platform ON external_references
 USING btree (alert_id, platform);
+
+-- Table to store dependencies between alerts --
+CREATE TABLE IF NOT EXISTS alert_dependency (
+    resource text NOT NULL,
+    event text NOT NULL,
+    dependencies jsonb,
+    CONSTRAINT alert_dependency_pkey PRIMARY KEY (resource, event)
+);
