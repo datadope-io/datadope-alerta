@@ -46,7 +46,7 @@ class ContextualizerAPI:
         return jsonify(resp)
 
     @staticmethod
-    @iom_api.route('/alert_context/rules/<id>', methods=['OPTIONS', 'PUT'])
+    @iom_api.route('/alert_context/rules/<rule_id>', methods=['OPTIONS', 'PUT'])
     @cross_origin()
     @permission(Scope.write_alerts)
     @jsonp
@@ -55,13 +55,13 @@ class ContextualizerAPI:
         rule = ContextualRule.from_dict(form)
         rule.id = rule_id
         resp = rule.store()
-        return jsonify(resp.__dict__)
+        return jsonify(resp.__dict__ if resp else 'Error: no rule matching the given ID')
 
     @staticmethod
-    @iom_api.route('/alert_context/rules/<id>', methods=['OPTIONS', 'DELETE'])
+    @iom_api.route('/alert_context/rules/<rule_id>', methods=['OPTIONS', 'DELETE'])
     @cross_origin()
     @permission(Scope.write_alerts)
     @jsonp
     def delete_rule(rule_id):
         resp = ContextualRule.clear(rule_id)
-        return jsonify(resp)
+        return jsonify(resp.__dict__ if resp else 'Error: no rule matching the given ID')
