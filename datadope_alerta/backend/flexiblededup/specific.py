@@ -237,8 +237,10 @@ class SpecificBackend:
             WHERE id=%(id)s 
             RETURNING *
         """
-        record = self.backend._updateone(update, vars(rule), returning=True)
-        return KeyValueParameter.from_record(record) if record else None
+        args = vars(rule)
+        args['contextual_rules'] = json.dumps(rule.contextual_rules)
+        record = self.backend._updateone(update, vars=args, returning=True)
+        return ContextualRule.from_record(record) if record else None
 
     def create_contextual_rule(self, rule: ContextualRule):
         insert = """
@@ -246,7 +248,9 @@ class SpecificBackend:
             VALUES (%(name)s, %(contextual_rules)s, %(context)s, %(priority)s, %(last_check)s)
             RETURNING *
          """
-        record = self.backend._insert(insert, vars(rule))
+        args = vars(rule)
+        args['contextual_rules'] = json.dumps(rule.contextual_rules)
+        record = self.backend._insert(insert, vars=args)
         return ContextualRule.from_record(record) if record else None
 
     def delete_contextual_rule(self, rule_id: int):
@@ -255,7 +259,59 @@ class SpecificBackend:
             WHERE id=%(id)s
             RETURNING *
         """
-        resp = self.backend._deleteall(delete, dict(rule_id=rule_id), returning=True)
+        resp = self.backend._deleteone(delete, dict(id=rule_id), returning=True)
+        return ContextualRule.from_record(resp) if resp else None
+
+    # ------------------------
+    # Alert dependencies
+    # ------------------------
+    def get_alert_dependency(self, resource: str, event: str):
+        query = """
+            SELECT *
+            FROM alert_dependency
+            WHERE resource=%(resource)s AND event=%(event)s
+        """
+        record = self.backend._fetchone(query, dict(resource=resource, event=event))
+        return AlertDependency.from_record(record) if record else None
+
+    def get_all_alert_dependencies(self, limit: int, offset: int):
+        query = """
+            SELECT *
+            FROM alert_dependency 
+            ORDER BY resource, event
+        """
+        records = self.backend._fetchall(query, vars={}, limit=limit, offset=offset)
+        data = []
+        for record in records:
+            data.append(AlertDependency.from_record(record).__dict__)
+        return data
+
+    def update_alert_dependency(self, alert_dependency: AlertDependency):
+        update = """
+            UPDATE alert_dependency
+            SET dependencies = %(dependencies)s
+            WHERE resource = %(resource)s and event = %(event)s
+            RETURNING *
+        """
+        record = self.backend._updateone(update, vars(alert_dependency), returning=True)
+        return AlertDependency.from_record(record) if record else None
+
+    def create_alert_dependency(self, alert_dependency: AlertDependency):
+        insert = """
+            INSERT INTO alert_dependency (resource, event, dependencies)
+            VALUES (%(resource)s, %(event)s, %(dependencies)s)
+            RETURNING *
+        """
+        record = self.backend._insert(insert, vars(alert_dependency))
+        return AlertDependency.from_record(record) if record else None
+
+    def delete_alert_dependency(self, resource: str, event: str):
+        delete = """
+            DELETE FROM alert_dependency
+            WHERE resource = %(resource)s AND event = %(event)s
+            RETURNING *
+        """
+        resp = self.backend._deleteall(delete, dict(resource=resource, event=event), returning=True)
         return len(resp) != 0
 
     # ------------------------
