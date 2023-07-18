@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 from alerta.database.backends.postgres.base import Backend
@@ -236,8 +237,10 @@ class SpecificBackend:
             WHERE id=%(id)s 
             RETURNING *
         """
-        record = self.backend._updateone(update, vars(rule), returning=True)
-        return KeyValueParameter.from_record(record) if record else None
+        args = vars(rule)
+        args['contextual_rules'] = json.dumps(rule.contextual_rules)
+        record = self.backend._updateone(update, vars=args, returning=True)
+        return ContextualRule.from_record(record) if record else None
 
     def create_contextual_rule(self, rule: ContextualRule):
         insert = """
@@ -245,7 +248,9 @@ class SpecificBackend:
             VALUES (%(name)s, %(contextual_rules)s, %(context)s, %(priority)s, %(last_check)s)
             RETURNING *
          """
-        record = self.backend._insert(insert, vars(rule))
+        args = vars(rule)
+        args['contextual_rules'] = json.dumps(rule.contextual_rules)
+        record = self.backend._insert(insert, vars=args)
         return ContextualRule.from_record(record) if record else None
 
     def delete_contextual_rule(self, rule_id: int):
@@ -254,8 +259,8 @@ class SpecificBackend:
             WHERE id=%(id)s
             RETURNING *
         """
-        resp = self.backend._deleteall(delete, dict(rule_id=rule_id), returning=True)
-        return len(resp) != 0
+        resp = self.backend._deleteone(delete, dict(id=rule_id), returning=True)
+        return ContextualRule.from_record(resp) if resp else None
 
     # ------------------------
     # Alert dependencies
