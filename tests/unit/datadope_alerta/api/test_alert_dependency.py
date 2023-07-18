@@ -1,16 +1,14 @@
-import json
+from typing import Dict, List
 
 import pytest
-from redis.commands.search import query
 
 from datadope_alerta.api.alert_dependency import AlertDependenciesApi
 from datadope_alerta.backend.flexiblededup.models.alert_dependency import AlertDependency
 from datadope_alerta.backend.flexiblededup.specific import SpecificBackend
-from alerta.database.backends.postgres.base import Backend
 
 
 # noinspection SpellCheckingInspection
-def _create_alert_dependency(resource: str, event: str, dependencies: str):
+def _create_alert_dependency(resource: str, event: str, dependencies: List[Dict]):
     return AlertDependency.from_dict({
         'resource': resource,
         'event': event,
@@ -39,9 +37,9 @@ class TestsContextualizer:
         ]
         with pytest.app.app_context():
             with pytest.app.test_request_context(json={
-                'resource': 'resource012',
-                'event': 'event012',
-                'dependencies': json.dumps(dependencies)
+                'resource': 'resource0123',
+                'event': 'event0123',
+                'dependencies': dependencies
             }
             ):
                 yield
@@ -58,7 +56,7 @@ class TestsContextualizer:
             with pytest.app.test_request_context(json={
                 'resource': 'resource012',
                 'event': 'event012',
-                'dependencies': json.dumps(dependencies)
+                'dependencies': dependencies
             }
             ):
                 yield
@@ -80,7 +78,7 @@ class TestsContextualizer:
             _create_alert_dependency(
                 'resource001',
                 'event001',
-                json.dumps(dependencies)
+                dependencies
             )
         )
         response = set_up_api.read_alert_dependency('resource001', 'event001')
@@ -98,8 +96,8 @@ class TestsContextualizer:
 
     def test_add_alert_dependency(self, get_request_with_body, set_up_api):
         response = set_up_api.create_alert_dependency()
-        assert response.json['resource'] == 'resource012'
-        assert response.json['event'] == 'event012'
+        assert response.json['resource'] == 'resource0123'
+        assert response.json['event'] == 'event0123'
 
     def test_add_alert_dependency_fails(self, get_request, set_up_api):
         with pytest.raises(Exception):

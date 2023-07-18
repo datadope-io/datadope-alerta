@@ -1,3 +1,10 @@
+# 2.2.1
+
+* Contextualizer api: fixed to now parse the data as a string before sending it to the database.
+* Alerts dependencies api: fixed to now parse the data as a string before sending it to the database.
+* Contextualizer api tests
+* Alerts dependencies api tests
+
 # 2.2.0
 
 * FIX: Environment processing now admits a key with a dict and a key as a dict field of the same dict.

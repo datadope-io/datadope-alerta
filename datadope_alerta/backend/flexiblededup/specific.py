@@ -313,3 +313,59 @@ class SpecificBackend:
         """
         resp = self.backend._deleteall(delete, dict(resource=resource, event=event), returning=True)
         return len(resp) != 0
+
+    # ------------------------
+    # Alert dependencies
+    # ------------------------
+    def get_alert_dependency(self, resource: str, event: str):
+        query = """
+            SELECT *
+            FROM alert_dependency
+            WHERE resource=%(resource)s AND event=%(event)s
+        """
+        record = self.backend._fetchone(query, dict(resource=resource, event=event))
+        return AlertDependency.from_record(record) if record else None
+
+    def get_all_alert_dependencies(self, limit: int, offset: int):
+        query = """
+            SELECT *
+            FROM alert_dependency 
+            ORDER BY resource, event
+        """
+        records = self.backend._fetchall(query, vars={}, limit=limit, offset=offset)
+        data = []
+        for record in records:
+            data.append(AlertDependency.from_record(record).__dict__)
+        return data
+
+    def update_alert_dependency(self, alert_dependency: AlertDependency):
+        update = """
+            UPDATE alert_dependency
+            SET dependencies = %(dependencies)s
+            WHERE resource = %(resource)s and event = %(event)s
+            RETURNING *
+        """
+        alert_dependency_vars = vars(alert_dependency)
+        alert_dependency_vars['dependencies'] = json.dumps(alert_dependency_vars['dependencies'])
+        record = self.backend._updateone(update, alert_dependency_vars, returning=True)
+        return AlertDependency.from_record(record) if record else None
+
+    def create_alert_dependency(self, alert_dependency: AlertDependency):
+        insert = """
+            INSERT INTO alert_dependency (resource, event, dependencies)
+            VALUES (%(resource)s, %(event)s, %(dependencies)s)
+            RETURNING *
+        """
+        alert_dependency_vars = vars(alert_dependency)
+        alert_dependency_vars['dependencies'] = json.dumps(alert_dependency_vars['dependencies'])
+        record = self.backend._insert(insert, alert_dependency_vars)
+        return AlertDependency.from_record(record) if record else None
+
+    def delete_alert_dependency(self, resource: str, event: str):
+        delete = """
+            DELETE FROM alert_dependency
+            WHERE resource = %(resource)s AND event = %(event)s
+            RETURNING *
+        """
+        resp = self.backend._deleteall(delete, dict(resource=resource, event=event), returning=True)
+        return len(resp) != 0
