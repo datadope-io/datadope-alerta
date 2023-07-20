@@ -184,7 +184,7 @@ python -m setup bdist_wheel
 One the package is built, it can be installed in an alerta python environment:
 
 ```shell
-pipenv install datadope-alerta/dist/datadope_alerta-2.1.0-py3-none-any.whl
+pipenv install datadope-alerta/dist/datadope_alerta-2.2.1-py3-none-any.whl
 ```
 
 Or may be included in the Alerta deployment Pipfile.

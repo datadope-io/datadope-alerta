@@ -2,14 +2,14 @@ FROM python:3.10-slim AS builder
 
 ARG TARGETPLATFORM
 ARG VERSION
-ENV VERSION=${VERSION:-2.1.0}
+ENV VERSION=${VERSION:-2.2.1}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=.
 
 # Install dependencies
 RUN apt-get -y update \
-    && apt-get -y install build-essential git libpq-dev libsasl2-dev python-dev libldap2-dev libssl-dev
+    && apt-get -y install build-essential git libpq-dev libsasl2-dev python-dev-is-python3 libldap2-dev libssl-dev
 
 # Install pipenv
 RUN pip install --upgrade pip \
