@@ -66,7 +66,9 @@ setup(
             'test = datadope_alerta.plugins.test.test_plugin:TestPlugin',
             'gchat = datadope_alerta.plugins.gchat.gchat_plugin:GChatPlugin',
             'zabbix_base = datadope_alerta.plugins.zabbix.zabbix_plugin:ZabbixBasePlugin',
-            'zabbix = datadope_alerta.plugins.zabbix.zabbix_plugin:ZabbixIOMPlugin'        ],
+            'zabbix = datadope_alerta.plugins.zabbix.zabbix_plugin:ZabbixIOMPlugin',
+            'jira = datadope_alerta.plugins.jira.plugin:JiraPlugin',
+        ],
         'alerta.recovery_actions.providers': [
             'awx = datadope_alerta.plugins.recovery_actions.providers.awx:Provider',
             'test = datadope_alerta.plugins.recovery_actions.providers.test:TestProvider'

@@ -1,3 +1,6 @@
+# 2.3.0
+* New plugin to send alerts to JIRA.
+
 # 2.2.1
 
 * Contextualizer api: fixed to now parse the data as a string before sending it to the database.

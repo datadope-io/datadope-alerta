@@ -1,3 +1,4 @@
+import logging
 import random
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -255,6 +256,10 @@ class AlertTask(celery.Task, ABC):
                     raise
                 retry_data['_countdown_'] = countdown
                 self.retry(exc=e, max_retries=max_retries, countdown=countdown, retry_spec=retry_data)
+        except Exception as e:
+            if self.logger.getEffectiveLevel() <= logging.DEBUG:
+                self.logger.exception("Exception in background task")
+            raise e
         finally:
             bg_timer.stop_timer(ts)
 
