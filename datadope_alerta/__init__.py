@@ -16,6 +16,8 @@ import flask
 from flask.json.provider import JSONProvider
 # noinspection PyPackageRequirements
 import jinja2
+# noinspection PyPackageRequirements
+from markupsafe import Markup
 import pytz
 
 from alerta.models.alert import Alert
@@ -103,7 +105,7 @@ def dumps_with_dates(dict_, **kwargs):
 
 
 def alert_pretty_json_string(alert: Alert):
-    return dumps_with_dates({x: y for x, y in alert.serialize.items() if y is not None}, indent=4)
+    return dumps_with_dates({x: y for x, y in alert.serialize.items() if y is not None and x != 'history'}, indent=4)
 
 
 def get_task_name(operation):

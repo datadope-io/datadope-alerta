@@ -1,0 +1,98 @@
+connection:
+  base_url: https://jira.atlassian.net
+  username: the_user@example.com
+  # api_token or password are used for basic authenticatiom. Password is deprecated so an api_token should be used,
+  # but it can be provided in a password field. api_token and password have the same use.
+  api_token: the_token
+  # password: the_password
+  # if bearer_token is provided bearer authentication is used instead of basic
+  # bearer_token: a_bearer_token
+  verify_ssl: true
+  connect_timeout: 15.1
+  read_timeout: 60.0
+  headers:
+    "Content-Type": "application/json"
+#  proxies:
+#    http: http://the_http_proxy.url
+#    https: http://the_https_proxy.url
+
+web_issue_url: "{{ alerter_config.connection.base_url }}/browse/{{ jira_key }}"
+
+data:
+  project_key: "MON"
+  issuetype: "Bug"
+  summary: "{{ alert.event | safe }}"
+  description: "{{ message | safe }}"
+  close_transition_id: 31
+
+mappings:
+  priority:
+    security: Critical
+    critical: Critical
+    major: High
+    minor: Medium
+    warning: Medium
+    indeterminate: Medium
+    informational: Low
+    debug: Low
+    trace: Low
+    unknown: Low
+
+operation_create:
+  endpoint: "/rest/api/2/issue"
+  # method: post
+  # headers: {}
+  # params: {}
+  # data: use instead of payload for not json payloads
+  payload: {
+    "fields": {
+      "project":
+        {
+          "key": "{{ data.project_key }}"
+        },
+      "summary": "{{ data.summary | safe }}",
+      "description": "{{ data.description | safe }}\n\nAlert payload:\n{code:json}{{ pretty_alert | safe }}{code}",
+      "issuetype": {
+        "name": "{{ data.issuetype }}"
+      },
+  #    "proitity": {
+  #      "name": "{{ mappings.priority[alert.severity] | default('Medium') }}"
+  #    }
+    }
+  }
+
+operation_resolve:
+  endpoint: "/rest/api/2/issue/{{ jira_key }}/comment"
+  payload: {
+    "body": "IOMetrics Alerta: {{ reason | safe }}"
+  }
+
+operation_repeat:
+  endpoint: "/rest/api/2/issue/{{ jira_key }}/comment"
+  payload: {
+    "body": "{{ message | safe }}"
+  }
+
+operation_close:
+  endpoint: "/rest/api/2/issue/{{ jira_key }}/transitions"
+  params:
+    expand: transitions.fields
+  payload: {
+    "update": {
+        "comment": [
+            {
+                "add": {
+                    "body": "Closed by IOMetrics Alerta: {{ reason | safe }}"
+                }
+            }
+        ]
+    },
+    "transition": {
+        "id": "{{ data.close_transition_id }}"
+    },
+#    "fields": {
+#        "resolution": {
+#            "name": "Done"
+#        }
+#    }
+  }
