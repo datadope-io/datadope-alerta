@@ -1,5 +1,5 @@
 connection:
-  base_url: https://jira.atlassian.net
+  base_url: https://jira.example.com
   username: the_user@example.com
   # api_token or password are used for basic authenticatiom. Password is deprecated so an api_token should be used,
   # but it can be provided in a password field. api_token and password have the same use.
@@ -15,6 +15,14 @@ connection:
 #  proxies:
 #    http: http://the_http_proxy.url
 #    https: http://the_https_proxy.url
+
+## For remote configuration
+#remote_config:
+#  field: customer
+#  remote_url: "http://remote.api/{{alert.customer}}/config"
+#  headers:
+#    API_KEY_HEADER_NAME: "the_api_key"
+#  verify_ssl: false
 
 web_issue_url: "{{ alerter_config.connection.base_url }}/browse/{{ jira_key }}"
 
@@ -75,24 +83,28 @@ operation_repeat:
 
 operation_close:
   endpoint: "/rest/api/2/issue/{{ jira_key }}/transitions"
-  params:
-    expand: transitions.fields
   payload: {
-    "update": {
-        "comment": [
-            {
-                "add": {
-                    "body": "Closed by IOMetrics Alerta: {{ reason | safe }}"
-                }
-            }
-        ]
-    },
-    "transition": {
-        "id": "{{ data.close_transition_id }}"
-    },
+    "body": "{{ reason | safe }}"
+  }
+# # To close the issue:
+#  params:
+#    expand: transitions.fields
+#  payload: {
+#    "update": {
+#        "comment": [
+#            {
+#                "add": {
+#                    "body": "Closed by IOMetrics Alerta: {{ reason | safe }}"
+#                }
+#            }
+#        ]
+#    },
+#    "transition": {
+#        "id": "{{ data.close_transition_id }}"
+#    },
 #    "fields": {
 #        "resolution": {
 #            "name": "Done"
 #        }
 #    }
-  }
+#  }

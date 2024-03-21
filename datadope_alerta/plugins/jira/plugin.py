@@ -2,11 +2,13 @@ import json
 import os
 from typing import Type, Optional, Tuple, Dict, Any
 
+import requests
 # noinspection PyPackageRequirements
 import yaml
 
 from alerta.models.alert import Alert
-from datadope_alerta import NormalizedDictView, get_config, VarDefinition, ContextualConfiguration, GlobalAttributes
+from datadope_alerta import NormalizedDictView, get_config, VarDefinition, ContextualConfiguration, GlobalAttributes, \
+    merge
 from datadope_alerta.plugins import Alerter, getLogger, RetryableException
 from datadope_alerta.plugins.iom_plugin import IOMAlerterPlugin
 from datadope_alerta.plugins.jira.client import JiraClient, RequestFields
@@ -33,6 +35,7 @@ class ConfigurationFields:
         OPERATION_RESOLVE = "operation_resolve"
         OPERATION_REPEAT = "operation_repeat"
         OPERATION_CLOSE = "operation_close"
+        REMOTE_CONFIG = "remote_config"
 
 
 class ResultFields:
@@ -71,8 +74,36 @@ class JiraAlerter(Alerter):
             cls._default_config = cls.read_default_configuration()
         return cls._default_config
 
+
+    def update_config_from_remote(self, alert: 'Alert') -> Optional[dict]:
+        remote_config = self.config.get(ConfigurationFields.DictFields.REMOTE_CONFIG, {})
+        if not remote_config:
+            return self.config
+        remote_config = self.render_value(value=remote_config, alert=alert)
+        field = remote_config.get("field", "customer")
+        field_value = getattr(alert, field, None)
+        if not field_value:
+            field_value = NormalizedDictView(alert.attributes).get(field)
+        if not field_value:
+            return self.config
+        remote_data = self.read_remote_config(url=remote_config["remote_url"],
+                                              headers=remote_config.get("headers", {}),
+                                              verify_ssl=remote_config.get("verify_ssl", True))
+        if remote_data:
+            self.config = merge(self.get_default_configuration(), remote_data)
+        else:
+            return self.config
+
+    @staticmethod
+    def read_remote_config( url: str, headers: dict, verify_ssl: bool) -> dict:
+        response = requests.get(url=url, headers=headers, verify=verify_ssl)
+        if response.status_code != 200:
+            raise ValueError(f"Failed to read remote configuration from {url}. Status: {response.status_code}")
+        return response.json()
+
     def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         operation = Alerter.process_event.__name__
+        self.update_config_from_remote(alert)
         operation_field = ConfigurationFields.DictFields.OPERATION_CREATE
         response = self._process_operation(alert, operation_field, operation, reason)
         if response.status_code in (200, 201):
@@ -130,6 +161,7 @@ class JiraAlerter(Alerter):
 
     def process_action(self, alert: 'Alert', reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
         operation = Alerter.process_action.__name__
+        self.update_config_from_remote(alert)
         if action == ContextualConfiguration.get_global_configuration(
                 GlobalAttributes.CONDITION_RESOLVED_ACTION_NAME):
             ignore_recovery, level = self.get_contextual_configuration(ContextualConfiguration.IGNORE_RECOVERY,
@@ -178,6 +210,7 @@ class JiraAlerter(Alerter):
         return self.jira_client.request(**operation_data)
 
     def _process_update(self, alert, operation, reason, operation_field):
+        self.update_config_from_remote(alert)
         jira_id, jira_key = self._preprocess_update(alert)
         if not isinstance(jira_id, str):
             return jira_id, jira_key

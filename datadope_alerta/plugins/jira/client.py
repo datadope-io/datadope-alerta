@@ -79,7 +79,8 @@ class JiraClient:
         if isinstance(self.proxies, str):
             self.proxies = json.loads(self.proxies)
 
-    def request(self, endpoint, method='POST', payload: dict = None, data=None, headers=None, params=None):
+    def request(self, endpoint, method='POST', payload: dict = None, payload_extra_fields: dict = None,
+                data=None, headers=None, params=None):
         if endpoint.startswith('http'):
             url = endpoint
         else:
@@ -90,6 +91,8 @@ class JiraClient:
         if not isinstance(payload, dict):
             data = payload
             payload = None
+        elif payload_extra_fields:
+            payload = {**payload, **payload_extra_fields}
         logger.debug('Requesting %s %s', method, url)
         return requests.request(url=url, method=method, headers=headers, params=params, json=payload, data=data,
                                 auth=self.auth, proxies=self.proxies,  verify=self.verify_ssl,
