@@ -1,12 +1,17 @@
 import json
 import os
+from datetime import datetime
 from typing import Type, Optional, Tuple, Dict, Any
 
+import pytz
+import requests
 # noinspection PyPackageRequirements
 import yaml
 
 from alerta.models.alert import Alert
-from datadope_alerta import NormalizedDictView, get_config, VarDefinition, ContextualConfiguration, GlobalAttributes
+from datadope_alerta import NormalizedDictView, get_config, VarDefinition, ContextualConfiguration, GlobalAttributes, \
+    merge, DateTime
+from datadope_alerta.backend.flexiblededup.models.key_value_store import KeyValueParameter
 from datadope_alerta.plugins import Alerter, getLogger, RetryableException
 from datadope_alerta.plugins.iom_plugin import IOMAlerterPlugin
 from datadope_alerta.plugins.jira.client import JiraClient, RequestFields
@@ -33,6 +38,7 @@ class ConfigurationFields:
         OPERATION_RESOLVE = "operation_resolve"
         OPERATION_REPEAT = "operation_repeat"
         OPERATION_CLOSE = "operation_close"
+        REMOTE_CONFIG = "remote_config"
 
 
 class ResultFields:
@@ -56,7 +62,7 @@ class JiraAlerter(Alerter):
         for k, v in self.config.items():
             if NormalizedDictView.key_transform(k) in config_fields and isinstance(v, str):
                 self.config[k] = json.loads(v)
-        self.jira_client = JiraClient(**self.config.get(ConfigurationFields.DictFields.CONNECTION, {}))
+        self.jira_client = None
 
     @staticmethod
     def read_default_configuration():
@@ -71,8 +77,60 @@ class JiraAlerter(Alerter):
             cls._default_config = cls.read_default_configuration()
         return cls._default_config
 
+
+    def update_config_from_remote(self, alert: 'Alert') -> Optional[dict]:
+        attributes = NormalizedDictView(alert.attributes)
+        remote_config = self.config.get(ConfigurationFields.DictFields.REMOTE_CONFIG, {})
+        if not remote_config:
+            logger.debug("No remote configuration for Jira")
+        else:
+            remote_config = self.render_value(value=remote_config, alert=alert)
+            field = remote_config.get("field", "customer")
+            field_value = getattr(alert, field, None)
+            if not field_value:
+                field_value = attributes.get(field)
+            if not field_value:
+                logger.warning("Field '%s' not found in alert or attributes", field)
+            else:
+                last_updated = attributes.get("jiraRemoteConfigLastUpdated")
+                must_read = True
+                if last_updated:
+                    last_updated = DateTime.parse(last_updated)
+                    stored_data = KeyValueParameter.from_db(f"jirarc_{field_value}")
+                    if stored_data:
+                        stored_data = json.loads(stored_data.value)
+                        last_read = DateTime.parse(stored_data["date"])
+                        if last_updated < last_read:
+                            self.config = stored_data["config"]
+                            logger.debug("Stored remote configuration is up-to-date. Last read: '%s' > '%s'",
+                                         last_read, last_updated)
+                            must_read = False
+                if must_read:
+                    logger.info("Reading remote configuration for '%s'", field_value)
+                    remote_data = self.read_remote_config(url=remote_config["remote_url"],
+                                                          headers=remote_config.get("headers", {}),
+                                                          verify_ssl=remote_config.get("verify_ssl", True))
+                    if remote_data:
+                        last_read = DateTime.iso8601_utc(datetime.now().astimezone(pytz.utc))
+                        self.config = merge(self.get_default_configuration(), remote_data)
+
+                        KeyValueParameter(f"jirarc_{field_value}",
+                                          json.dumps({"date": last_read, "config": self.config})).store()
+                    else:
+                        logger.warning("No remote configuration read")
+        self.jira_client = JiraClient(**self.config.get(ConfigurationFields.DictFields.CONNECTION, {}))
+        return self.config
+
+    @staticmethod
+    def read_remote_config( url: str, headers: dict, verify_ssl: bool) -> dict:
+        response = requests.get(url=url, headers=headers, verify=verify_ssl)
+        if response.status_code != 200:
+            raise ValueError(f"Failed to read remote configuration from {url}. Status: {response.status_code}")
+        return response.json()
+
     def process_event(self, alert: 'Alert', reason: Optional[str]) -> Tuple[bool, Dict[str, Any]]:
         operation = Alerter.process_event.__name__
+        self.update_config_from_remote(alert)
         operation_field = ConfigurationFields.DictFields.OPERATION_CREATE
         response = self._process_operation(alert, operation_field, operation, reason)
         if response.status_code in (200, 201):
@@ -130,6 +188,7 @@ class JiraAlerter(Alerter):
 
     def process_action(self, alert: 'Alert', reason: Optional[str], action: str) -> Tuple[bool, Dict[str, Any]]:
         operation = Alerter.process_action.__name__
+        self.update_config_from_remote(alert)
         if action == ContextualConfiguration.get_global_configuration(
                 GlobalAttributes.CONDITION_RESOLVED_ACTION_NAME):
             ignore_recovery, level = self.get_contextual_configuration(ContextualConfiguration.IGNORE_RECOVERY,
@@ -178,6 +237,7 @@ class JiraAlerter(Alerter):
         return self.jira_client.request(**operation_data)
 
     def _process_update(self, alert, operation, reason, operation_field):
+        self.update_config_from_remote(alert)
         jira_id, jira_key = self._preprocess_update(alert)
         if not isinstance(jira_id, str):
             return jira_id, jira_key

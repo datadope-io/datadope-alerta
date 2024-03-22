@@ -1,4 +1,5 @@
 import json
+import os
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -353,17 +354,23 @@ class Alerter(ABC):
         :return:
         """
         attributes = NormalizedDictView(alert.attributes)
+        extra_data = attributes.get('extraData', {})
         event_tags = self.get_event_tags(alert, operation)
-        return render_value(value,
-                            alert=alert,
-                            attributes=attributes,
-                            event_tags=event_tags,
-                            alerter_config=self.config,
-                            alerter_name=self.name,
-                            operation=operation,
-                            operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
-                            pretty_alert=alert_pretty_json_string(alert),
-                            **kwargs)
+        data_dict = dict(
+            alert=alert,
+            attributes=attributes,
+            event_tags=event_tags,
+            alerter_config=self.config,
+            alerter_name=self.name,
+            operation=operation,
+            operation_key=ALERTERS_KEY_BY_OPERATION[operation] if operation else None,
+            pretty_alert=alert_pretty_json_string(alert),
+            env=os.environ,
+        )
+        if extra_data:
+            data_dict.update(extra_data)
+        data_dict.pop('value', None)
+        return render_value(value, **data_dict, **kwargs)
 
     def get_message(self, alert: Alert, operation: str, reason, **kwargs) -> str:
         """

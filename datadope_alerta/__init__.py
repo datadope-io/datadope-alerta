@@ -127,7 +127,11 @@ def render_value(value, **kwargs):
             result.append(render_value(el, **kwargs))
         return result
     elif isinstance(value, str):
-        return flask.render_template_string(value, **kwargs)
+        try:
+            return flask.render_template_string(value, **kwargs)
+        except jinja2.exceptions.UndefinedError:
+            logger.warning("Undefined variable rendering string '%s'", value)
+            return value
     else:
         return value
 

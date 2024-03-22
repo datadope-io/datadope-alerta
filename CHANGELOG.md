@@ -1,3 +1,7 @@
+# 2.4.0
+* jira plugin: added support for remote configuration depending on a field (usually customer)
+* support for synthetix-ssas
+
 # 2.3.0
 * New plugin to send alerts to JIRA.
 
