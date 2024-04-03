@@ -1,3 +1,6 @@
+# 2.4.1
+* make reason value renderable
+
 # 2.4.0
 * jira plugin: added support for remote configuration depending on a field (usually customer)
 * support for synthetix-ssas

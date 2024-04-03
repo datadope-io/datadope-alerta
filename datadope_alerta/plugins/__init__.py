@@ -391,7 +391,7 @@ class Alerter(ABC):
 
         original_message,_ = self.get_contextual_configuration(ContextualConfiguration.MESSAGE, alert, operation)
         if reason:
-            original_reason = reason
+            original_reason = self.render_value(reason, alert, operation)
         else:
             original_reason, _ = self.get_contextual_configuration(ContextualConfiguration.REASON, alert, operation)
         parser = MessageParserByTags(self.get_event_tags(alert, operation), logger)
