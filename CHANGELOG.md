@@ -2,6 +2,7 @@
 * make reason value renderable
 * support to provide auto close/resolve alert reason with autoCloseText/autoResolve attributes
 * COLUMNS config can now be provided as environment variable
+* do not use alert.text as default reason when recovering
 
 
 # 2.4.0
