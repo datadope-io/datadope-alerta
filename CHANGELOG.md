@@ -1,6 +1,7 @@
 # 2.4.1
 * make reason value renderable
 * support to provide auto close/resolve alert reason with autoCloseText/autoResolve attributes
+* COLUMNS config can now be provided as environment variable
 
 
 # 2.4.0
