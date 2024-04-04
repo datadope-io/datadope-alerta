@@ -1,3 +1,10 @@
+# 2.4.1
+* make reason value renderable
+* support to provide auto close/resolve alert reason with autoCloseText/autoResolve attributes
+* COLUMNS config can now be provided as environment variable
+* do not use alert.text as default reason when recovering
+
+
 # 2.4.0
 * jira plugin: added support for remote configuration depending on a field (usually customer)
 * support for synthetix-ssas

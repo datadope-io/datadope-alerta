@@ -1,8 +1,8 @@
 from datetime import timedelta
 
 from datadope_alerta import CONFIG_AUTO_CLOSE_TASK_INTERVAL, \
-    NormalizedDictView, DEFAULT_AUTO_CLOSE_TASK_INTERVAL, ContextualConfiguration, thread_local,  \
-    CONFIG_AUTO_RESOLVE_TASK_INTERVAL, DEFAULT_AUTO_RESOLVE_TASK_INTERVAL
+    NormalizedDictView, DEFAULT_AUTO_CLOSE_TASK_INTERVAL, ContextualConfiguration, thread_local, \
+    CONFIG_AUTO_RESOLVE_TASK_INTERVAL, DEFAULT_AUTO_RESOLVE_TASK_INTERVAL, render_value
 
 from . import app, celery, db, getLogger, Alert, Status, AlertaClient
 
@@ -95,6 +95,9 @@ def _action_on_alerts(alerts_ids, action, text):
         alert = Alert.find_by_id(alert_id)
         if alert:
             if alert.status not in (Status.Closed, Status.Expired):
+                specific_text = NormalizedDictView(alert.attributes).get(f"auto{action.capitalize()}Text")
+                if specific_text:
+                    text = render_value(specific_text, alert=alert, attributes=NormalizedDictView(alert.attributes))
                 request_environ = {'REMOTE_ADDR': alert.attributes.get('ip', '127.0.0.1')}
                 try:
                     with current_app.test_request_context(environ_base=request_environ):

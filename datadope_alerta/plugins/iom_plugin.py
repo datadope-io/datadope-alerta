@@ -213,7 +213,7 @@ class IOMAlerterPlugin(PluginBase, ABC):
             thread_local.operation = operation_key
             alerter_operation_data = AlerterOperationData.from_db(alert.id, self.alerter_name, operation_key)
         self.logger.debug("Entering post_receive method")
-        reason = kwargs.get('reason') or alert.text
+        reason = kwargs.get('reason') or ('close operator action' if recovering else alert.text)
         new_status, begin, delay = self._prepare_begin_processing(
             alert, alerter_operation_data, is_recovering=recovering, is_actioning=actioning, is_repeating=repeating,
             new_event_status=new_event_status, reason=reason)
