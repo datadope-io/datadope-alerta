@@ -1,7 +1,6 @@
 from typing import List, Any, Optional, Dict
 
 from datadope_alerta import thread_local
-from datadope_alerta.api.contextualizer import ContextualizerAPI
 from datadope_alerta.backend.flexiblededup.models.rules import ContextualRule
 from datadope_alerta.plugins import getLogger
 from datadope_alerta.plugins.notifier.utils import compare_conditions
@@ -30,11 +29,11 @@ class NotifierPlugin(PluginBase):
         reached = False
 
         while not reached:
-            rules = ContextualizerAPI.read_all_rules(page, offset)
-            all_rules.extend([ContextualRule.from_dict(element) for element in rules.json])
+            rules = ContextualRule.all_from_db(limit=page, offset=offset)
+            all_rules.extend(rules)
             offset += page
 
-            if not rules or len(rules.json) < page:
+            if not rules or len(rules) < page:
                 reached = True
 
         return all_rules

@@ -43,6 +43,7 @@ class ContextualizerAPI:
         limit = request.args.get('limit', limit)
         offset = request.args.get('offset', offset)
         resp = ContextualRule.all_from_db(limit=limit, offset=offset)
+        resp = [rule.__dict__ for rule in resp]
         return jsonify(resp)
 
     @staticmethod

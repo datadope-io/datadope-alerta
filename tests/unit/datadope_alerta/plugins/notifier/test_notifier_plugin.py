@@ -91,52 +91,48 @@ class TestNotifierPlugin:
     def get_contextual_rules_none(self):
         return []
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_conditions_less_rules_than_limit(self, mock_contextualizer_api, get_notifier,
                                                   get_contextual_rules):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert len(get_notifier.get_conditions(page=5)) == len(get_contextual_rules)
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_conditions_more_rules_than_limit(self, mock_contextualizer_api, get_notifier,
                                                   get_contextual_rules):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert len(get_notifier.get_conditions(page=2)) == len(get_contextual_rules)
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_conditions_same_number_of_rules_and_limit(self, mock_contextualizer_api, get_notifier,
                                                            get_contextual_rules):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert len(get_notifier.get_conditions(page=3)) == len(get_contextual_rules)
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_conditions_no_rules(self, mock_contextualizer_api, get_notifier, get_contextual_rules_none):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules_none[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules_none[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert len(get_notifier.get_conditions(page=3)) == len(get_contextual_rules_none)
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_pre_receive(self, mock_contextualizer_api, get_notifier, get_alert, get_contextual_rules_2):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules_2[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules_2[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert get_alert.event == "test_event"
         get_alert.timeout = 111111
         get_alert.create_time = datetime.datetime.utcnow()
@@ -164,14 +160,13 @@ class TestNotifierPlugin:
         except AttributeError:
             pass
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_pre_receive_none(self, mock_contextualizer_api, get_notifier, get_alert,
                                   get_contextual_rules_none):
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
-            rules = get_contextual_rules_none[offset:limit + offset]
-            return jsonify([i.__dict__ for i in rules])
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
+            return get_contextual_rules_none[offset:limit + offset]
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_api.all_from_db.side_effect = read_all_rules_mock
         assert get_notifier.pre_receive(alert=get_alert) == get_alert
 
     def test_post_receive(self, get_notifier, get_alert):

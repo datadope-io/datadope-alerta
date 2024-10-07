@@ -1,3 +1,6 @@
+# 2.4.2
+* fix (notifier): error when running async (issue #2) 
+
 # 2.4.1
 * make reason value renderable
 * support to provide auto close/resolve alert reason with autoCloseText/autoResolve attributes

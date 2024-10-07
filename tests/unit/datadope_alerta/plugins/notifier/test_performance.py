@@ -105,7 +105,7 @@ class TestPerformance:
             text='test_text',
             )
 
-    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualizerAPI')
+    @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     @pytest.mark.parametrize('size, match_case', [
         (10, 1), (10, 4), (10, 8), (10, 0),
         (100, 1), (100, 4), (100, 8), (100, 0),
@@ -113,7 +113,7 @@ class TestPerformance:
         (10000, 1), (10000, 4), (10000, 8), (10000, 0),
         (100000, 1), (100000, 4), (100000, 8), (100000, 0),
     ])
-    def test_contextual_rules(self, mock_contextualizer_api, get_app, get_notifier, get_alert,
+    def test_contextual_rules(self, mock_contextualizer_rule, get_app, get_notifier, get_alert,
                               size, match_case):
         """
         This test is executed once for every tuple marked above, changing in size and type of
@@ -123,14 +123,14 @@ class TestPerformance:
         loops = 0
         global_limit = 0
 
-        def read_all_rules_mock(limit=50, offset=0) -> Response:
+        def read_all_rules_mock(limit=50, offset=0) -> list[ContextualRule]:
             rules = all_rules[offset:limit + offset]
             nonlocal loops, global_limit
             global_limit = limit
             loops += 1
-            return jsonify([i.__dict__ for i in rules])
+            return rules
 
-        mock_contextualizer_api.read_all_rules.side_effect = read_all_rules_mock
+        mock_contextualizer_rule.all_from_db.side_effect = read_all_rules_mock
         get_notifier.pre_receive(alert=get_alert)
         result = ceil(float(size) / global_limit)
 
