@@ -1,5 +1,6 @@
 # 2.4.2
-* fix (notifier): error when running async (issue #2) 
+* fix (notifier): error when running async (issue #2)
+* fix (backend): logging error when running async
 
 # 2.4.1
 * make reason value renderable

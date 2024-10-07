@@ -28,8 +28,6 @@ ATTRIBUTE_INFERRED_CORRELATION = 'inferredCorrelation'
 CONFIG_DEFAULT_DEDUPLICATION_TYPE = 'DEFAULT_DEDUPLICATION_TYPE'
 CONFIG_DEFAULT_DEDUPLICATION_TEMPLATE = 'DEFAULT_DEDUPLICATION_TEMPLATE'
 
-logger = logging.getLogger(__name__)
-
 
 class DeduplicationType(str, Enum):
     Both = 'both'
@@ -54,6 +52,33 @@ class JsonWithDatetime(Json):
 
 
 class Backend(PGBackend):
+    _logger = None
+
+    @staticmethod
+    def getLogger(name):  # noqa
+        from ... import AlertIdFilter
+        # # noinspection PyPackageRequirements
+        # from celery.utils.log import get_task_logger
+        #
+        # filter_ = AlertIdFilter.get_instance()
+        # partial = name
+        # partial, _, end = partial.rpartition('.')
+        # while partial:
+        #     tmp = get_task_logger(partial)
+        #     tmp.addFilter(filter_)
+        #     partial, _, end = partial.rpartition('.')
+        # logger_ = get_task_logger(name)
+        # logger_.addFilter(filter_)
+        # return logger_
+        logger = logging.getLogger(name)
+        logger.addFilter(AlertIdFilter.get_instance())
+        return logger
+
+    @property
+    def logger(self):
+        if self._logger is None:
+            self._logger = self.getLogger(__name__)
+        return self._logger
 
     def __init__(self, app=None):
         self.uri = None
@@ -212,7 +237,7 @@ class Backend(PGBackend):
             # if value has not changed but resource or event have.
             alert.attributes[ATTRIBUTE_ORIGINAL_ID] = original.id
             alert.attributes.pop(ATTRIBUTE_DEDUPLICATION, None)
-            logger.debug("[DEDUPLICATION] Deduplicating alert '%s' -> '%s'", alert.id, original.id)
+            self.logger.debug("[DEDUPLICATION] Deduplicating alert '%s' -> '%s'", alert.id, original.id)
         return original
 
     def dedup_alert(self, alert, history):
@@ -241,7 +266,7 @@ class Backend(PGBackend):
                 original_id=original_id
             )
             return self._updateone(update, vars(alert), returning=True)
-        logger.error("Deduplicating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
+        self.logger.error("Deduplicating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
         return alert  # should not happen
 
     def is_correlated(self, alert):
@@ -274,11 +299,11 @@ class Backend(PGBackend):
         if original and original.status in (Status.Closed, Status.Expired) and alert.severity not in (
                 Severity.Normal, Severity.Ok, Severity.Cleared):
             # Alerts are not reopened. A new one is created
-            logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Creating new alert '%s'",
+            self.logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Creating new alert '%s'",
                          original.id, original.severity, alert.severity, alert.id)
             return None
         if original:
-            logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Correlating received alert '%s'",
+            self.logger.debug("[CORRELATION] Alert '%s' severity changes from '%s' to '%s'. Correlating received alert '%s'",
                          original.id, original.severity, alert.severity, alert.id)
             alert.attributes[ATTRIBUTE_ORIGINAL_ID] = original.id
             alert.attributes.pop(ATTRIBUTE_DEDUPLICATION, None)
@@ -306,7 +331,7 @@ class Backend(PGBackend):
                 original_id=original_id
             )
             return self._updateone(update, vars(alert), returning=True)
-        logger.error("Correlating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
+        self.logger.error("Correlating alert '%s' without '%s' attribute", alert.id, ATTRIBUTE_ORIGINAL_ID)
         return alert  # should not happen
 
     def get_alert_history(self, alert, page=None, page_size=None):
