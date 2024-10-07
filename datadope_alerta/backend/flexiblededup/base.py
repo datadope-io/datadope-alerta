@@ -190,8 +190,9 @@ class Backend(PGBackend):
             dedup_filter = "((resource=%(resource)s AND event=%(event)s) " \
                            "OR attributes->>'{deduplication_attr}'='{deduplication}')"
         if dedup_filter:
-            dedup_filter = dedup_filter.format(deduplication_attr=ATTRIBUTE_DEDUPLICATION,
-                                               deduplication=deduplication)
+            dedup_filter = dedup_filter.format(
+                deduplication_attr=ATTRIBUTE_DEDUPLICATION,
+                deduplication=deduplication.replace('%', '%%') if deduplication else deduplication)
         return dedup_filter
 
     def is_duplicate(self, alert):
