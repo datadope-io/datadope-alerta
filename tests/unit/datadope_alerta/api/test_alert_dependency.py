@@ -17,7 +17,7 @@ def _create_alert_dependency(resource: str, event: str, dependencies: List[Dict]
 
 
 # noinspection PyProtectedMember,SpellCheckingInspection
-class TestsContextualizer:
+class TestsAlertDependency:
 
     @pytest.fixture()
     def set_up_api(self):
@@ -54,8 +54,8 @@ class TestsContextualizer:
         ]
         with pytest.app.app_context():
             with pytest.app.test_request_context(json={
-                'resource': 'resource012',
-                'event': 'event012',
+                'resource': 'resource0123',
+                'event': 'event0123',
                 'dependencies': dependencies
             }
             ):
@@ -104,5 +104,5 @@ class TestsContextualizer:
             set_up_api.create_rule()
 
     def test_update_alert_dependency(self, get_request_with_body_update, set_up_api):
-        response = set_up_api.update_alert_dependency('resource012', 'event012')
+        response = set_up_api.update_alert_dependency('resource0123', 'event0123')
         assert response.json['dependencies'] == [{'event': 'event0232', 'resource': 'resource0232'}]

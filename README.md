@@ -87,16 +87,16 @@ launched.
 
 | Attribute         | Type                  | Scope   | Meaning                                                          |
 |-------------------|-----------------------|---------|------------------------------------------------------------------|
-| deduplication     | string                | Global  |                                                                  |
-| deduplicationType | 'both' or 'attribute' | Global  |                                                                  |
-| alerters          | list \ json           | Global  |                                                                  |
+| deduplication     | string                | Global  | See backend info above                                           |
+| deduplicationType | 'both' or 'attribute' | Global  | See backend info above                                           |
+| alerters          | list \ json           | Global  | Alerter plugins to be executed to notify alert                   |
 | eventTags         | dict \ json           | Global  |                                                                  |
 | autoCloseAt       | datetime              | Global  |                                                                  |
 | autoCloseAfter    | float (seconds)       | Global  | Fills / replaces `autoCloseAt` with last_received_time + value   |
 | autoResolveAt     | datetime              | Global  |                                                                  |
 | autoResolveAfter  | float (seconds)       | Global  | Fills / replaces `autoResolveAt` with last_received_time + value |
 | ignoreRecovery    | bool                  | Alerter |                                                                  |
-| actionDelay       | float                 | Alerter |                                                                  | 
+| actionDelay       | float                 | Alerter | Seconds to wait before notifying alerters                        | 
 | tasksDefinition   | dict \ json           | Alerter |                                                                  |
 | repeatMinInterval | dict \ json           | Alerter | Min interval from last repetition to send a new repeat event     |
 | recoveryActions   | dict \ json           | Global  | Recovery actions definition                                      |

@@ -6,7 +6,7 @@ class ContextualRule:
 
     def __init__(self, name, **kwargs):
         self.name: str = name
-        self.id: int = kwargs.get('id', None)
+        self.id: Optional[int] = kwargs.get('id', None)
         self.contextual_rules: list = kwargs.get('contextual_rules')
         self.context: dict = kwargs.get('context')
         self.priority: int = kwargs.get('priority', 1000)

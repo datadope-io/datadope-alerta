@@ -184,8 +184,7 @@ zabbix_export:
                     if (value !== 'undefined') {
                         switch(key) {
                             case 'severity': 
-                                // TODO: Map severity
-                                Alerta.data[key] = 'major';
+                                Alerta.data[key] = value;
                                 break;
         
                             case 'timeout':
