@@ -17,7 +17,7 @@ def _create_alert_dependency(resource: str, event: str, dependencies: List[Dict]
 
 
 # noinspection PyProtectedMember,SpellCheckingInspection
-class TestsContextualizer:
+class TestsAlertDependency:
 
     @pytest.fixture()
     def set_up_api(self):
