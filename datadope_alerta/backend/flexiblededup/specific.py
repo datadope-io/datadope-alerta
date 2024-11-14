@@ -233,7 +233,7 @@ class SpecificBackend:
             UPDATE alert_contextual_rules
             SET name=%(name)s, rules=%(contextual_rules)s,
                 context=%(context)s, priority=%(priority)s,
-                last_check=%(last_check)s
+                last_check=%(last_check)s, append_lists=%(append_lists)s
             WHERE id=%(id)s 
             RETURNING *
         """
@@ -244,8 +244,8 @@ class SpecificBackend:
 
     def create_contextual_rule(self, rule: ContextualRule):
         insert = """
-            INSERT INTO alert_contextual_rules (name, rules, context, priority, last_check)
-            VALUES (%(name)s, %(contextual_rules)s, %(context)s, %(priority)s, %(last_check)s)
+            INSERT INTO alert_contextual_rules (name, rules, context, priority, last_check, append_lists)
+            VALUES (%(name)s, %(contextual_rules)s, %(context)s, %(priority)s, %(last_check)s, %(append_lists)s)
             RETURNING *
          """
         args = vars(rule)

@@ -1,3 +1,6 @@
+# 2.4.3
+* fix (notifier): context for list elements will be appended by default. A parameter in the rule is included
+
 # 2.4.2
 * fix (notifier): error when running async (issue #2)
 * fix (backend): logging error when running async

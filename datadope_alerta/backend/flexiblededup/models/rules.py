@@ -11,6 +11,7 @@ class ContextualRule:
         self.context: dict = kwargs.get('context')
         self.priority: int = kwargs.get('priority', 1000)
         self.last_check: bool = kwargs.get('last_check', False)
+        self.append_lists: bool = kwargs.get('append_lists', True)
 
     @classmethod
     def get_db(cls):
@@ -37,7 +38,8 @@ class ContextualRule:
             contextual_rules=rec.rules,
             context=rec.context,
             priority=rec.priority,
-            last_check=rec.last_check
+            last_check=rec.last_check,
+            append_lists=rec.append_lists
         )
 
     @classmethod
@@ -48,7 +50,8 @@ class ContextualRule:
             contextual_rules=json.get('contextual_rules'),
             context=json.get('context'),
             priority=json.get('priority'),
-            last_check=json.get('last_check')
+            last_check=json.get('last_check'),
+            append_lists=json.get('append_lists', True)
         )
 
     def store(self):

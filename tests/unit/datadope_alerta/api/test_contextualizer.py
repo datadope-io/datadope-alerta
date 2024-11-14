@@ -77,7 +77,7 @@ class TestsContextualizer:
         """
         response = set_up_api.read_rule('testing_rule')
 
-        assert ('context', 'contextual_rules', 'id', 'last_check', 'name', 'priority') == tuple(response.json.keys())
+        assert ('append_lists', 'context', 'contextual_rules', 'id', 'last_check', 'name', 'priority') == tuple(response.json.keys())
 
     def test_read_rule_fails(self, get_request, set_up_api):
         """

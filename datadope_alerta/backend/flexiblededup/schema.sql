@@ -270,6 +270,9 @@ CREATE TABLE IF NOT EXISTS alert_contextual_rules (
 ALTER SEQUENCE alert_contextual_rules_id_seq
 OWNED BY alert_contextual_rules.id;
 
+ALTER TABLE alert_contextual_rules
+ADD COLUMN IF NOT EXISTS append_lists boolean DEFAULT TRUE;
+
 -- Table to store task/alert_id mapping for end-to-end async processing
 
 CREATE TABLE IF NOT EXISTS async_alert (
