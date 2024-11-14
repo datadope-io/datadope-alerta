@@ -2,7 +2,7 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-from flask import jsonify, Response
+
 from alerta.utils.format import DateTime
 
 from alerta.models.alert import Alert
@@ -14,7 +14,7 @@ from datadope_alerta.plugins.notifier.notifier_plugin import NotifierPlugin
 class TestNotifierPlugin:
 
     @pytest.fixture()
-    def get_notifier(self, get_app):
+    def get_notifier(self, get_app):  # noqa
         return NotifierPlugin()
 
     @pytest.fixture()
@@ -31,7 +31,7 @@ class TestNotifierPlugin:
                 'alerters': 'notifier,test_async',
                 'eventTags': '{ "test_tag": "test_value", "test_tag2": "test_value2" }',
             },
-            text='test_text')
+            text='test_message')
 
     @pytest.fixture()
     def get_alert_final_result(self, get_alert) -> Alert:
@@ -39,7 +39,7 @@ class TestNotifierPlugin:
             'alerters': 'notifier,test_async',
             'eventTags': '{ "test_tag": "test_value", "test_tag2": "test_value2" }',
         }
-        get_alert.message = "Matched Rule 1"
+        get_alert.text = "Matched Rule 1"
         get_alert.tags = {"tag1", "tag2"}
         return get_alert
 
@@ -48,15 +48,15 @@ class TestNotifierPlugin:
         return [ContextualRule(
             name="Rule 1",
             contextual_rules=[{"resource": "res1"}],
-            context={"message": "Matched Rule 1"}
+            context={"text": "Matched Rule 1"}
         ), ContextualRule(
             name="Rule 2",
             contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-            context={"message": "Matched Rule 2"}
+            context={"text": "Matched Rule 2"}
         ), ContextualRule(
             name="Rule 3",
             contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-            context={"message": "Matched Rule 3"}
+            context={"text": "Matched Rule 3"}
         )]
 
     @pytest.fixture()
@@ -64,10 +64,10 @@ class TestNotifierPlugin:
         return [ContextualRule(
             name="Rule 1",
             contextual_rules=[{"resource": "test_resource"}],
-            context={"message": "Matched Rule 1",
+            context={"text": "Matched Rule 1",
                      "event": "modified",
                      "timeout": 10,
-                     "create_time": "2023-05-18T11:00:00.000Z",
+                     "createTime": "2023-05-18T11:00:00.000Z",
                      "attributes": {"alerters": "modified", "other_attr": "value"},
                      "tags": ["second"],
                      "group": None,
@@ -76,7 +76,7 @@ class TestNotifierPlugin:
         ), ContextualRule(
             name="Rule 2",
             contextual_rules=[{"resource": "test_resource", "attributes": {"attr1": "valor1"}}],
-            context={"message": "Matched Rule 2"}
+            context={"text": "Matched Rule 2"}
         ), ContextualRule(
             name="Rule 3",
             contextual_rules=[{"resource": "test_resource", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
@@ -154,11 +154,6 @@ class TestNotifierPlugin:
             "other_attr": "value"
         }
         assert get_alert.tags == ["first", "second"]
-        try:
-            getattr(get_alert, "message")
-            assert False, "'message' shouldn't be defined"
-        except AttributeError:
-            pass
 
     @patch('datadope_alerta.plugins.notifier.notifier_plugin.ContextualRule')
     def test_get_pre_receive_none(self, mock_contextualizer_api, get_notifier, get_alert,
@@ -173,13 +168,13 @@ class TestNotifierPlugin:
         assert get_notifier.post_receive(alert=get_alert) is None
 
     def test_status_change(self, get_notifier, get_alert):
-        assert get_notifier.status_change(alert=get_alert, status='test_status', text='test_text') is None
+        assert get_notifier.status_change(alert=get_alert, status='test_status', text='test_message') is None
 
     def test_take_action(self, get_notifier, get_alert):
-        assert get_notifier.take_action(alert=get_alert, action='test_action', text='test_text') is None
+        assert get_notifier.take_action(alert=get_alert, action='test_action', text='test_message') is None
 
     def test_take_note(self, get_notifier, get_alert):
-        assert get_notifier.take_note(alert=get_alert, text='test_text') is None
+        assert get_notifier.take_note(alert=get_alert, text='test_message') is None
 
     def test_delete(self, get_notifier, get_alert):
         assert get_notifier.delete(alert=get_alert) is True

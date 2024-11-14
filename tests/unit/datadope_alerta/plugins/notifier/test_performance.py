@@ -2,7 +2,6 @@ from math import ceil
 from unittest.mock import patch
 
 import pytest
-from flask import jsonify, Response
 
 from alerta.models.alert import Alert
 from datadope_alerta.backend.flexiblededup.models.rules import ContextualRule
@@ -27,7 +26,7 @@ def get_contextual_rules_match_1():
     return [ContextualRule(
         name="Rule 101",
         contextual_rules=[{"resource": "test_resource"}],
-        context={"text_no": "Matched Rule 101"}
+        context={"rawData": "Matched Rule 101"}
     ), ContextualRule(
         name="Rule 1022",
         contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
@@ -84,7 +83,7 @@ def get_contextual_rules_no_match():
 class TestPerformance:
 
     @pytest.fixture()
-    def get_notifier(self, get_app):
+    def get_notifier(self, get_app):  # noqa
         return NotifierPlugin()
 
     @pytest.fixture()
@@ -113,7 +112,7 @@ class TestPerformance:
         (10000, 1), (10000, 4), (10000, 8), (10000, 0),
         (100000, 1), (100000, 4), (100000, 8), (100000, 0),
     ])
-    def test_contextual_rules(self, mock_contextualizer_rule, get_app, get_notifier, get_alert,
+    def test_contextual_rules(self, mock_contextualizer_rule, get_app, get_notifier, get_alert,  # noqa
                               size, match_case):
         """
         This test is executed once for every tuple marked above, changing in size and type of

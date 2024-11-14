@@ -1,10 +1,10 @@
+from copy import deepcopy
 from typing import List, Any, Optional, Dict
 
 from datadope_alerta import thread_local
 from datadope_alerta.backend.flexiblededup.models.rules import ContextualRule
 from datadope_alerta.plugins import getLogger
 from datadope_alerta.plugins.notifier.utils import compare_conditions
-from alerta.utils.collections import merge
 
 from alerta.models.alert import Alert
 from alerta.plugins import PluginBase
@@ -15,12 +15,27 @@ logger = getLogger(__name__)
 
 class NotifierPlugin(PluginBase):
 
+    ATTRIBUTES_CONVERSION_NAMES = {
+        'type': 'event_type',
+        'createTime': 'create_time',
+        'rawData': 'raw_data',
+        'duplicateCount': 'duplicate_count',
+        'previousSeverity': 'previous_severity',
+        'trendIndication': 'trend_indication',
+        'receiveTime': 'receive_time',
+        'lastReceiveId': 'last_receive_id',
+        'lastReceiveTime': 'last_receive_time',
+        'updateTime': 'update_time',
+    }
+    ATTRIBUTES_TO_IGNORE = ['id', 'href', 'history', 'last_receive_id']
+    DATE_ATTRIBUTES = ['createTime', 'receiveTime', 'lastReceiveTime', 'updateTime']
+
     def __init__(self, name=None):
         super().__init__(name=name)
 
     @staticmethod
     def compare(source: Alert, conditions: List[ContextualRule]) -> Dict:
-        return compare_conditions(source.serialize, conditions)
+        return compare_conditions(deepcopy(source.serialize), conditions)
 
     @staticmethod
     def get_conditions(page) -> List[ContextualRule]:
@@ -42,23 +57,24 @@ class NotifierPlugin(PluginBase):
         thread_local.alert_id = alert.id
         thread_local.alerter_name = 'notifier'
         try:
-            logger.debug("PREPROCESSING ALERT")
             conditions = self.get_conditions(page=kwargs.get('page', 100))
-            context = self.compare(alert, conditions)
-            for key, value in context.items():
-                if value is not None and key in ('create_time', 'receive_time', 'last_receive_time'):
+            if not conditions:
+                logger.debug("NO CONDITIONS FOUND")
+                return alert
+            logger.debug("CHECKING CONDITIONS")
+            final_alert_serialized = self.compare(alert, conditions)
+            for key, value in final_alert_serialized.items():
+                if key in self.ATTRIBUTES_TO_IGNORE:
+                    continue
+                attr_name = self.ATTRIBUTES_CONVERSION_NAMES.get(key, key)
+                if value is not None and key in self.DATE_ATTRIBUTES and isinstance(value, str):
                     value = DateTime.parse(value)
                 try:
-                    original = getattr(alert, key)
-                    if value is None or original is None:
-                        setattr(alert, key, value)
-                    elif type(value) == type(original):
-                        if isinstance(value, dict):
-                            merge(original, value)
-                        elif isinstance(value, list):
-                            original.extend([v for v in value if v not in original])
-                        else:
-                            setattr(alert, key, value)
+                    original = getattr(alert, attr_name)
+                    if original == value:
+                        continue
+                    if value is None or original is None or type(value) == type(original):
+                        setattr(alert, attr_name, value)
                     else:
                         logger.warning("Context key '%s' has a wrong type '%s' and should be '%s'. Ignoring",
                                        key, type(value).__name__, type(original).__name__)

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime
 
 import pytest
@@ -7,9 +8,7 @@ from datadope_alerta.plugins.notifier.utils import compare_rules, compare_condit
 
 
 class TestUtils:
-    @pytest.fixture
-    def source(self):
-        return {
+    SOURCE_DICT = {
             "resource": "res1",
             "event": "event1",
             "attributes": {
@@ -22,6 +21,9 @@ class TestUtils:
             },
             "tags": ["tag1", "tag2"]
         }
+    @pytest.fixture
+    def source(self):
+        return deepcopy(self.SOURCE_DICT)
 
     @pytest.fixture
     def conditions(self):
@@ -29,42 +31,42 @@ class TestUtils:
             ContextualRule(
                 name="Rule 1",
                 contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
+                context={"text": "Matched Rule 1"}
             ),
             ContextualRule(
                 name="Rule 2",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2"}
+                context={"text": "Matched Rule 2"}
             ),
             ContextualRule(
                 name="Rule 3",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"message": "Matched Rule 3"}
+                context={"text": "Matched Rule 3", "attributes": {"rule3": True}}
             ),
             ContextualRule(
                 name="Rule 4",
                 contextual_rules=[{"createTime": {"$gt": datetime.now()}}],
-                context={"message": "Matched Rule 4"}
+                context={"text": "Matched Rule 4"}
             ),
             ContextualRule(
                 name="Rule 5",
                 contextual_rules=[{"try": "try1"}, {"resource": "res1", "event": "event1"}, {"try": "try2"}],
-                context={"message": "Matched Rule 5"}
+                context={"text": "Matched Rule 5"}
             ),
             ContextualRule(
                 name="Rule 6",
                 contextual_rules=[{"resource": "res2"}],
-                context={"message": "Matched Rule 6"}
+                context={"text": "Matched Rule 6"}
             ),
             ContextualRule(
                 name="Rule 7",
                 contextual_rules=[{"attributes": {"attr1": "valor2"}}],
-                context={"message": "Matched Rule 7"}
+                context={"text": "Matched Rule 7"}
             ),
             ContextualRule(
                 name="Rule 8",
                 contextual_rules=[{"tags": ["tag3"]}],
-                context={"message": "Matched Rule 8"}
+                context={"text": "Matched Rule 8"}
             )
         ]
 
@@ -74,17 +76,17 @@ class TestUtils:
             ContextualRule(
                 name="Rule 1",
                 contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
+                context={"text": "Matched Rule 1"}
             ),
             ContextualRule(
                 name="Rule 2",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2"}
+                context={"text": "Matched Rule 2"}
             ),
             ContextualRule(
                 name="Rule 3",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"tags": {"tag1", "tag2"}}
+                context={"tags": ["tag3", "tag4"]}
             )
         ]
 
@@ -94,17 +96,17 @@ class TestUtils:
             ContextualRule(
                 name="Rule 1",
                 contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
+                context={"text": "Matched Rule 1"}
             ),
             ContextualRule(
                 name="Rule 2",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2"}
+                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor_not_matched"}}],
+                context={"text": "Matched Rule 2"}
             ),
             ContextualRule(
                 name="Rule 3",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}, {"tags": ["tag1"]}],
-                context={"tags": {"tag1", "tag2"}}
+                context={"tags": ["tag3", "tag4"]}
             )
         ]
 
@@ -114,37 +116,17 @@ class TestUtils:
             ContextualRule(
                 name="Rule 1",
                 contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
+                context={"text": "Matched Rule 1"}
             ),
             ContextualRule(
                 name="Rule 2",
                 contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2"}
+                context={"text": "Matched Rule 2"}
             ),
             ContextualRule(
                 name="Rule 3",
-                contextual_rules=[{"tags": ["tag1"]}, {"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"tags": {"tag1", "tag2"}}
-            )
-        ]
-
-    @pytest.fixture
-    def conditions_with_different_dicts(self):
-        return [
-            ContextualRule(
-                name="Rule 1",
-                contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
-            ),
-            ContextualRule(
-                name="Rule 2",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2", "tags": {"tag1": "one", "tag2": "two"}}
-            ),
-            ContextualRule(
-                name="Rule 3",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"tags": {"tag1": "value1", "tag2": "value2", "tag3": "value 3", "tag4": "value4"}}
+                contextual_rules=[{"tags": ["tag3"]}, {"resource": "res1", "attributes": {"attr1": "valor1"}}],
+                context={"tags": ["tag3", "tag4"]}
             )
         ]
 
@@ -154,99 +136,52 @@ class TestUtils:
             ContextualRule(
                 name="Rule 1",
                 contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
+                context={"text": "Matched Rule 1"}
             ),
             ContextualRule(
                 name="Rule 2",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2", "tags": ["tag1"]}
+                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor2"}}],
+                context={"text": "Matched Rule 2", "tags": ["tag1"]}
             ),
             ContextualRule(
                 name="Rule 3",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"message": "Matched Rule 3"}
-            )
-        ]
-
-    @pytest.fixture
-    def conditions_with_lists_in_different_rules(self):
-        return [
-            ContextualRule(
-                name="Rule 1",
-                contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1"}
-            ),
-            ContextualRule(
-                name="Rule 2",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2", "tags": ["tag1"]}
-            ),
-            ContextualRule(
-                name="Rule 3",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"message": "Matched Rule 3", "tags": ["tag1", "tag2", "tag3"]}
-            )
-        ]
-
-    @pytest.fixture
-    def conditions_with_string_and_int(self):
-        return [
-            ContextualRule(
-                name="Rule 1",
-                contextual_rules=[{"resource": "res1"}],
-                context={"message": "Matched Rule 1", "level": "critical"}
-            ),
-            ContextualRule(
-                name="Rule 2",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}}],
-                context={"message": "Matched Rule 2", "tags": ["tag1"]}
-            ),
-            ContextualRule(
-                name="Rule 3",
-                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": ["tag1"]}],
-                context={"message": "Matched Rule 3", "priority": 1},
-                last_check=True
+                contextual_rules=[{"resource": "res1", "attributes": {"attr1": "valor1"}, "tags": "tag2"}],
+                context={"text": "Matched Rule 3", "tags": ["tag1"]},
+                append_lists=False
             )
         ]
 
     def test_compare_conditions_with_sets(self, source, conditions_with_sets):
         assert compare_conditions(source, conditions_with_sets) == \
-               {"message": "Matched Rule 1", "tags": {"tag1", "tag2"}}
+               { **source, **{"text": "Matched Rule 2", "tags": ["tag1", "tag2", "tag3", "tag4"]} }
 
     def test_compare_conditions_with_different_attributes(self, source, conditions_with_different_attributes):
         assert compare_conditions(source, conditions_with_different_attributes) == \
-               {"message": "Matched Rule 1", "tags": {"tag1", "tag2"}}
+               { **source, **{"text": "Matched Rule 1", "tags": ["tag1", "tag2", "tag3", "tag4"]} }
 
     def test_compare_conditions_with_different_attributes_changed(self, source,
                                                                   conditions_with_different_attributes_changed):
         assert compare_conditions(source, conditions_with_different_attributes_changed) == \
-               {"message": "Matched Rule 1", "tags": {"tag1", "tag2"}}
+               { **source, **{"text": "Matched Rule 2", "tags": ["tag1", "tag2", "tag3", "tag4"]} }
 
     def test_compare_conditions_with_lists(self, source, conditions_with_lists):
-        assert compare_conditions(source, conditions_with_lists) == {"message": "Matched Rule 1", "tags": ["tag1"]}
-
-    def test_compare_conditions_with_strings_and_int(self, source, conditions_with_string_and_int):
-        assert compare_conditions(source, conditions_with_string_and_int) == \
-               {"message": "Matched Rule 1", "level": "critical", "priority": 1, "tags": ["tag1"]}
-
-    def test_compare_conditions_with_lists_in_different_rules(self, source, conditions_with_lists_in_different_rules):
-        assert compare_conditions(source, conditions_with_lists_in_different_rules) == \
-               {"message": "Matched Rule 1", "tags": ["tag1"]}
-
-    def test_compare_conditions_with_different_dicts(self, source, conditions_with_different_dicts):
-        assert compare_conditions(source, conditions_with_different_dicts) == \
-               {"message": "Matched Rule 1", "tags": {"tag1": "one", "tag2": "two", "tag3": "value 3", "tag4": "value4"}
-                }
+        assert (compare_conditions(source, conditions_with_lists) ==
+                { **source, **{"text": "Matched Rule 3", "tags": ["tag1"]} })
 
     def test_compare_conditions(self, source, conditions):
-        assert compare_conditions(source, conditions) == {"message": "Matched Rule 1"}
+        expected = {**source, **{"text": "Matched Rule 5"}}
+        expected["attributes"]["rule3"] = True
+        assert compare_conditions(source, conditions) == expected
 
     def test_compare_condition(self, source, conditions):
-        assert compare_condition(source, conditions[0]) == {"message": "Matched Rule 1"}
-        assert compare_condition(source, conditions[1]) == {"message": "Matched Rule 2"}
-        assert compare_condition(source, conditions[2]) == {"message": "Matched Rule 3"}
+        assert compare_condition(source, conditions[0]) == {"text": "Matched Rule 1"}
+        assert compare_condition(source, conditions[1]) == {"text": "Matched Rule 2"}
+        assert compare_condition(source, conditions[2]) == {
+            "text": "Matched Rule 3",
+            "attributes": {"rule3": True}
+        }
         assert compare_condition(source, conditions[3]) == {}
-        assert compare_condition(source, conditions[4]) == {"message": "Matched Rule 5"}
+        assert compare_condition(source, conditions[4]) == {"text": "Matched Rule 5"}
         assert compare_condition(source, conditions[5]) == {}
         assert compare_condition(source, conditions[6]) == {}
         assert compare_condition(source, conditions[7]) == {}
