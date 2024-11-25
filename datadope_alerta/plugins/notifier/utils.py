@@ -1,4 +1,5 @@
-from typing import Dict, List
+import re
+from typing import Dict, List, MutableMapping
 
 from datadope_alerta import NormalizedDictView
 from datadope_alerta.backend.flexiblededup.models.rules import ContextualRule
@@ -21,25 +22,42 @@ def compare_condition(source: Dict, condition: ContextualRule) -> Dict:  # 3
     return {}
 
 
-def compare_rules(source: Dict, rule: Dict) -> bool:  # 4
+def compare_rules(source: Dict | MutableMapping, rule: Dict) -> bool:  # 4
     for key, value in rule.items():
         existing_value = source.get(key)
         if existing_value is None:
             if value is not None:
                 return False
+        elif value is None:
+            return False
         elif isinstance(existing_value, dict) and not isinstance(value, dict):
             return False
         elif isinstance(existing_value, dict):
-            if not compare_rules(NormalizedDictView(NormalizedDictView(existing_value)), value):
+            if not compare_rules(NormalizedDictView(existing_value), value):
                 return False
         elif isinstance(existing_value, list):
+            # Value must exist in the existing list
             if not isinstance(value, list):
-                if value not in existing_value:
-                    return False
+                value = [value]
+            if len(value) == 0 and len(existing_value) > 0:
+                return False
             elif len(value) > 0:
-                if not all([v in existing_value for v in value]):
-                    return False
-        elif str(source.get(key)) != str(value):
+                # All values must exist in the existing list
+                for value_element in value:
+                    for existing_element in existing_value:
+                        if isinstance(value_element, str):
+                            if re.match(value_element, str(existing_element), re.IGNORECASE):
+                                break
+                        else:
+                            if str(value_element) == str(existing_element):
+                                break
+                    else:
+                        return False
+        elif isinstance(value, str):
+            # Compare existing value with value considering the value as a regex pattern string
+            if not re.match(value, str(existing_value), re.IGNORECASE):
+                return False
+        elif str(existing_value) != str(value):
             return False
     return True
 

@@ -1,3 +1,6 @@
+# 2.5.0
+* feat (notifier): string values in rules will be considered regex to apply when comparing with alert values
+
 # 2.4.3
 * fix (notifier): context for list elements will be appended by default. A parameter in the rule is included
 
