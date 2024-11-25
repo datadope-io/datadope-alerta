@@ -20,10 +20,22 @@ attributes:
 | context          | Dict         | Dictionary containing the extra information to be added to the alert if this rules matches it                                                                                               |
 | append_lists     | Boolean      | If `True`, the lists in the `context` dictionary will be appended to the existing ones, otherwise they will be replaced.                                                                    |
 
-## Contextualization procedure
-Dictionary in context is merged to alert, taking into account the following rules:
+
+## Comparison procedure
+
+The following considerations have to be taken into account to consider that an alert matches a rule:
+
 * if more of one dict is provided in `contextual_rules`, if any of the dicts is matched, the rule is considered matched.
 We can consider the list as a logical OR operation among rules.
+* For string comparison, the string configured in the rule is considered a regex pattern. The field is considered matched
+if the alert corresponding field value matches the pattern. Comparison is made case-insensitive.
+* For list fields, all elements in the list must be present in the corresponding alert field. If the provided rule
+is a string but the corresponding alert field is a list, the rule is considered matched if the string is in the list.
+
+## Contextualization procedure
+
+Dictionary in `context` is merged to alert, taking into account the following rules:
+
 * inner dictionaries are merged recursively
 * inner lists are appended if `append_lists` is `True`, otherwise they are replaced
 
